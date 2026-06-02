@@ -1,0 +1,37 @@
+{
+  "$schema": "./node_modules/as-test/as-test.config.schema.json",
+  "input": ["./assembly/__tests__/*.spec.ts"],
+  "outDir": "./.as-test/build",
+  "logs": "./.as-test/logs",
+  "coverageDir": "./.as-test/coverage",
+  "snapshotDir": "./.as-test/snapshots",
+  "config": "./asconfig.json",
+  "coverage": {
+    "enabled": true,
+    "mode": "project",
+    "include": ["assembly/utf/**/*.ts"],
+    "exclude": ["assembly/utf/tables.ts"],
+    "ignore": {
+      "snippets": [
+        "*throw new Error(E_INVALID_UTF*)*",
+        "*if (ret == 0) return -1*",
+        "*if (w1 < 0) return -1*",
+        "*if (i + 2 > len) return -1*",
+        "*if (remaining <= 0) return 0*"
+      ],
+      "locations": [
+        "assembly/utf/utf8_to_utf16.ts:297:*",
+        "assembly/utf/utf8_to_utf16.ts:243:*"
+      ]
+    }
+  },
+  "buildOptions": {
+    "target": "wasi",
+    "args": ["--enable", "simd", "--enable", "bulk-memory", "--enable", "sign-extension"]
+  },
+  "runOptions": {
+    "runtime": {
+      "cmd": "node ./.as-test/runners/default.wasi.js <file>"
+    }
+  }
+}

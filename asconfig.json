@@ -1,0 +1,18 @@
+{
+  "targets": {
+    "debug": {
+      "optimizeLevel": 0,
+      "shrinkLevel": 0,
+      "debug": true
+    },
+    "release": {
+      "optimizeLevel": 3,
+      "shrinkLevel": 1,
+      "converge": true,
+      "noAssert": true
+    }
+  },
+  "options": {
+    "enable": ["simd", "bulk-memory", "sign-extension"]
+  }
+}

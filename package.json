@@ -1,0 +1,79 @@
+{
+  "name": "utf-as",
+  "version": "0.1.0",
+  "description": "SIMD UTF-8/UTF-16 for AssemblyScript — a drop-in for String.UTF8 / String.UTF16 with simdutf-derived 128-bit Wasm SIMD kernels.",
+  "type": "module",
+  "author": "Jairus Tanaka <me@jairus.dev> (https://jairus.dev/)",
+  "license": "MIT",
+  "homepage": "https://github.com/JairusSW/utf-as#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JairusSW/utf-as.git"
+  },
+  "bugs": {
+    "url": "https://github.com/JairusSW/utf-as/issues"
+  },
+  "keywords": [
+    "assemblyscript",
+    "utf-8",
+    "utf-16",
+    "unicode",
+    "simd",
+    "simdutf",
+    "wasm",
+    "webassembly",
+    "encode",
+    "decode",
+    "validate"
+  ],
+  "types": "./assembly/index.ts",
+  "ascMain": "./assembly/index.ts",
+  "exports": {
+    ".": {
+      "types": "./assembly/index.ts",
+      "default": "./assembly/index.ts"
+    },
+    "./utf": "./assembly/utf/index.ts",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "assembly/index.ts",
+    "assembly/utf/**/*.ts",
+    "asconfig.json",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "ast test",
+    "play": "asc ./assembly/test.ts -o ./build/test.wasm && wasmtime ./build/test.wasm",
+    "bench": "bash ./scripts/run-bench.sh",
+    "bench:fetch": "bash ./scripts/fetch-simdutf-payloads.sh",
+    "bench:simdutf": "npm run bench:fetch && bash ./scripts/run-bench.sh utf-validate-simdutf",
+    "bench:vs-stdlib": "npm run bench:fetch && bash ./scripts/run-bench.sh utf-vs-stdlib",
+    "bench:list": "bash ./scripts/run-bench.sh --list",
+    "bench:summary": "node ./scripts/bench-summary.mjs",
+    "charts": "npm run charts:build && npm run charts:serve",
+    "charts:build": "bash ./scripts/build-charts.sh",
+    "charts:list": "bash ./scripts/build-charts.sh --list",
+    "charts:serve": "npx --yes serve@latest ./charts",
+    "report": "npm run bench && npm run charts:build",
+    "report:vs-stdlib": "npm run bench:vs-stdlib && npm run bench:simdutf && npm run charts:build",
+    "clean": "rm -rf build charts .as-test",
+    "clean:bench": "rm -rf build/logs charts",
+    "prepublishOnly": "npm test"
+  },
+  "devDependencies": {
+    "@assemblyscript/wasi-shim": "latest",
+    "@types/node": "latest",
+    "as-heap-analyzer": "latest",
+    "as-test": "latest",
+    "assemblyscript": "latest",
+    "chart.js": "latest",
+    "chartjs-node-canvas": "latest",
+    "chartjs-plugin-datalabels": "latest"
+  },
+  "peerDependencies": {
+    "assemblyscript": ">=0.27.0"
+  }
+}
