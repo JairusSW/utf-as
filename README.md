@@ -46,10 +46,10 @@ Then import from the package root:
 import { UTF8, UTF16 } from "utf-as";
 ```
 
-Builds need [SIMD](https://github.com/WebAssembly/spec/blob/main/proposals/simd/SIMD.md) and [Sign Extension](https://github.com/WebAssembly/spec/blob/main/proposals/sign-extension-ops/Overview.md) enabled:
+Builds need [SIMD](https://github.com/WebAssembly/spec/blob/main/proposals/simd/SIMD.md) enabled:
 
 ```bash
---enable simd --enable sign-extension
+--enable simd
 ```
 
 Enabling [Bulk Memory](https://github.com/WebAssembly/spec/blob/main/proposals/bulk-memory-operations/Overview.md) helps with memory allocation overhead and is not required, but strongly recommended.

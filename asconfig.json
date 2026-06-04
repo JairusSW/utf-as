@@ -13,6 +13,6 @@
     }
   },
   "options": {
-    "enable": ["simd", "bulk-memory", "sign-extension"]
+    "enable": ["simd", "bulk-memory"]
   }
 }

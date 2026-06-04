@@ -27,7 +27,7 @@
   },
   "buildOptions": {
     "target": "wasi",
-    "args": ["--enable", "simd", "--enable", "bulk-memory", "--enable", "sign-extension"]
+    "args": ["--enable", "simd", "--enable", "bulk-memory"]
   },
   "runOptions": {
     "runtime": {

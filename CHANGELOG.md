@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-06-04
+
+### Changed
+
+- Dropped the Wasm **sign-extension** feature requirement. The SIMD kernels only
+  use vector lane ops, never scalar `i32.extend8_s` / `i32.extend16_s`, so the
+  feature was never actually needed. Builds now require only `--enable simd`
+  (`--enable bulk-memory` still recommended), widening runtime compatibility with
+  no behavior change.
+
 ## [0.1.0] - 2026-06-01
 
 Initial release — SIMD UTF-8/UTF-16 for AssemblyScript, a drop-in for stdlib
@@ -41,5 +51,6 @@ On simdutf's `wikipedia_mars/*.html` + `emoji.txt` fixtures (V8 / Apple Silicon)
 - `UTF16.validate` — ~24–25 GB/s on BMP-heavy text via the surrogate-free fast
   path; ~13 GB/s on dense surrogate-pair content.
 
-[Unreleased]: https://github.com/JairusSW/utf-as/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/JairusSW/utf-as/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/JairusSW/utf-as/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/JairusSW/utf-as/releases/tag/v0.1.0
