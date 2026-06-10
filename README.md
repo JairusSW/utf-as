@@ -32,6 +32,8 @@ This library ports simdutf's westmere SSE4 UTF-8 kernels to 128-bit Wasm SIMD an
 - `UTF8.validate`  →  up to 58 GB/s on ASCII-heavy HTML; 11-35 GB/s on mixed multibyte content
 - `UTF16.validate`  →  ~24-25 GB/s on BMP-heavy text (surrogate-free fast path); ~13 GB/s on dense surrogate-pair content
 
+Every operation has a portable **SWAR** (SIMD-within-a-register) path that runs by default and is dispatched to the SIMD kernel only above a size threshold, so small inputs avoid SIMD setup overhead and the library works **with or without `--enable simd`** (the throughput figures above are the SIMD path).
+
 If you often pass strings between a UTF-8-based host and wasm, consider using `UTF8.decode`/`UTF8.encode` for much faster conversion and less overhead.
 
 ## Installation
@@ -46,11 +48,13 @@ Then import from the package root:
 import { UTF8, UTF16 } from "utf-as";
 ```
 
-Builds need [SIMD](https://github.com/WebAssembly/spec/blob/main/proposals/simd/SIMD.md) enabled:
+For full throughput, enable [SIMD](https://github.com/WebAssembly/spec/blob/main/proposals/simd/SIMD.md) (it is on by default in the bundled `asconfig.json`):
 
 ```bash
 --enable simd
 ```
+
+SIMD is no longer required — with `--disable simd` (or a toolchain without it) the library falls back to its scalar/SWAR paths and still works, just slower on large input.
 
 Enabling [Bulk Memory](https://github.com/WebAssembly/spec/blob/main/proposals/bulk-memory-operations/Overview.md) helps with memory allocation overhead and is not required, but strongly recommended.
 
@@ -78,7 +82,7 @@ All namespace functions match their Standard Library `String.UTF8` / `String.UTF
 
 ### `UTF8`
 
-Drop-in for `String.UTF8`. The SIMD kernels handle the stdlib-default path; the scalar fallback (a byte-for-byte stdlib clone) covers `nullTerminated`, `REPLACE`, and `ERROR` modes.
+Drop-in for `String.UTF8`. `encode` / `decode` run a **SWAR** transcoder (8 code units / bytes per `u64`, with a scalar coder for multibyte) by default and dispatch to the SIMD kernel only when SIMD is compiled in (`ASC_FEATURE_SIMD`) and the input clears a size threshold (encode 32 units, decode 256 bytes) — below that the SIMD kernels do no vector work, so SWAR is faster (up to ~3× on small ASCII). The scalar fallback (a byte-for-byte stdlib clone) covers `nullTerminated`, `REPLACE`, and `ERROR` modes. Like validation, `encode` / `decode` compile and run with `--enable simd` off.
 
 ```ts
 UTF8.byteLength(str: string, nullTerminated?: bool): i32
@@ -129,6 +133,13 @@ UTF16.validateUnsafe(buf: usize, len: i32): bool      // len in bytes
 - **`UTF8`** (Keiser–Lemire, "Validating UTF-8 in less than one instruction per byte"): rejects lone continuation bytes, overlong sequences, UTF-8-encoded surrogates (`ED A0–BF X`), out-of-range codepoints (>U+10FFFF), and truncated multibyte at EOF.
 - **`UTF16`**: rejects lone surrogates - every high surrogate (`D800–DBFF`) must be immediately followed by a low surrogate (`DC00–DFFF`), and vice versa - plus odd byte lengths.
 
+`UTF8.validate` runs a **SWAR** (SIMD-within-a-register, 8 bytes per `u64`) validator by default and dispatches to the SIMD kernel only when SIMD is compiled in (`ASC_FEATURE_SIMD`) **and** the input is ≥ 64 bytes. The two paths agree byte-for-byte. Two consequences:
+
+- **Small inputs are faster.** Below 64 bytes the SWAR path skips the SIMD kernel's 64-byte scratch fill and validates 8 bytes at a time — up to ~3× the throughput of the SIMD path on short ASCII (see the [chart](#charts)).
+- **SIMD is now optional for validation.** With `--enable simd` off, `UTF8.validate` compiles and runs through the SWAR path alone (it reaches zero v128 ops).
+
+`UTF16.validate` works the same way (SWAR default, SIMD ≥ 16 bytes / one 8-unit block) and is ~2-2.5× faster than the SIMD path on sub-block input. `UTF8.encode` / `decode` likewise default to SWAR (see [`UTF8`](#utf8)); `UTF16.encode` / `decode` are a plain `memory.copy`. The whole library now compiles and runs with `--enable simd` off.
+
 ### Length pre-counters
 
 Output-size pre-computation for sizing destination buffers without performing the full conversion.
@@ -171,28 +182,57 @@ V8 / Apple Silicon, per simdutf payload. Regenerate with `npm run charts`.
 <details>
 <summary><b><code>UTF8.decode</code> vs <code>String.UTF8.decode</code></b> - 2-7× faster across scripts</summary>
 
-![UTF8.decode vs stdlib](charts/utf-vs-stdlib-decode-v8.png)
+![UTF8.decode vs stdlib](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf-vs-stdlib-decode-v8.png)
 
 </details>
 
 <details>
 <summary><b><code>UTF8.encode</code> vs <code>String.UTF8.encode</code></b> - 8-13× faster across scripts</summary>
 
-![UTF8.encode vs stdlib](charts/utf-vs-stdlib-encode-v8.png)
+![UTF8.encode vs stdlib](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf-vs-stdlib-encode-v8.png)
 
 </details>
 
 <details>
 <summary><b><code>UTF8.validate</code></b> - up to ~58 GB/s on ASCII-heavy markup, tapering with multibyte density</summary>
 
-![UTF8.validate throughput](charts/utf-validate-simdutf-v8.png)
+![UTF8.validate throughput](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf-validate-simdutf-v8.png)
 
 </details>
 
 <details>
 <summary><b><code>UTF16.validate</code></b> - a flat ~24-25 GB/s on BMP text (surrogate-free fast path); <code>emoji.txt</code> is the lone all-surrogate outlier</summary>
 
-![UTF16.validate throughput](charts/utf16-validate-simdutf-v8.png)
+![UTF16.validate throughput](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf16-validate-simdutf-v8.png)
+
+</details>
+
+<details>
+<summary><b>SWAR vs SIMD <code>UTF8.validate</code></b> - SWAR wins below the 64-byte dispatch threshold; SIMD pulls ahead above it</summary>
+
+![SWAR vs SIMD validate, ASCII](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf-validate-swar-vs-simd-ascii-v8.png)
+![SWAR vs SIMD validate, mixed](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf-validate-swar-vs-simd-mixed-v8.png)
+
+Regenerate with `npm run bench -- utf-validate-swar && npm run charts:build -- utf-validate-swar-vs-simd`.
+
+</details>
+
+<details>
+<summary><b>SWAR vs SIMD <code>UTF8.decode</code> / <code>UTF8.encode</code></b> - SWAR wins on small/medium input; SIMD pulls ahead above the dispatch thresholds</summary>
+
+![SWAR vs SIMD decode, ASCII](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf-decode-swar-vs-simd-ascii-v8.png)
+![SWAR vs SIMD encode, ASCII](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf-encode-swar-vs-simd-ascii-v8.png)
+
+Regenerate with `npm run bench -- utf-transcode-swar && npm run charts:build -- utf-transcode-swar-vs-simd`.
+
+</details>
+
+<details>
+<summary><b>SWAR vs SIMD <code>UTF16.validate</code></b> - SWAR wins below one 8-unit block (16 bytes); the cheap bitmask kernel pulls ahead above it</summary>
+
+![SWAR vs SIMD UTF-16 validate, BMP](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf16-validate-swar-vs-simd-bmp-v8.png)
+
+Regenerate with `npm run bench -- utf16-validate-swar && npm run charts:build -- utf16-validate-swar-vs-simd`.
 
 </details>
 

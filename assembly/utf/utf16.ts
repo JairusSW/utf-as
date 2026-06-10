@@ -1,7 +1,18 @@
-import { surr_block, SCRATCH } from "./validate";
+import { validateUtf16Simd } from "./validate";
+import { validateUtf16Swar } from "./validate_swar";
 
 /** Encoding helpers for UTF-16. */
 export namespace UTF16 {
+  /** Smallest input (bytes) routed to the SIMD validator when SIMD is compiled
+   *  in. Below this the SWAR validator wins: it skips the SIMD path's
+   *  `memory.fill` + `memory.copy` of a 16-byte scratch block for the <8-unit
+   *  tail and checks 4 surrogate-free units per u64. Tuned against
+   *  `utf16-validate-swar.bench.ts`: below one 8-unit block (16 bytes) the SIMD
+   *  path pays a 16-byte scratch fill and SWAR wins ~2-2.5×; at one block or
+   *  more the cheap bitmask kernel pulls ahead. */
+  // @ts-ignore: decorator
+  @inline const SIMD_THRESHOLD: i32 = 16;
+
   /** Calculates the byte length of the specified string when encoded as UTF-16. */
   export function byteLength(str: string): i32 {
     return <i32>(<usize>str.length << 1);
@@ -16,47 +27,16 @@ export namespace UTF16 {
   /** Whether `len` raw bytes at `buf` are well-formed UTF-16LE (an even byte
    *  length with no lone surrogates). Empty input is valid.
    *
-   *  Per 8-unit (128-bit) block we build two bitmasks — `H` (high surrogates)
-   *  and `L` (low surrogates), one bit per code unit. A high at unit i demands
-   *  a low at i+1, so the required low positions are `H << 1`; the block is
-   *  well-formed iff `L == ((H << 1) | carryIn)`, where `carryIn` is 1 when the
-   *  previous block ended on a high surrogate. The top bit of `H` carries into
-   *  the next block; a still-pending carry at end-of-input is an unpaired high.
-   *  Surrogate-free blocks take a cheap fast path — see `surr_block`. */
+   *  The default path is the SWAR validator (`validate_swar.ts`): a BMP fast
+   *  path skips 4 surrogate-free units per u64, with a per-unit pairing check
+   *  for surrogates. When SIMD is compiled in (`ASC_FEATURE_SIMD`), inputs above
+   *  the threshold route to the per-8-unit bitmask kernel (`validateUtf16Simd`).
+   *  Both agree byte-for-byte. With `--enable simd` off the SIMD branch folds
+   *  away and the v128 kernel is dead-code-eliminated. */
   // @ts-ignore: decorator
   @unsafe export function validateUnsafe(buf: usize, len: i32): bool {
-    if (len & 1) return false; // dangling half code unit
-    const units = len >> 1;
-    if (units <= 0) return units == 0;
-
-    let pos: i32 = 0;
-    let prevHigh: u32 = 0; // 1 if the previous block ended on a high surrogate
-    let errors: u32 = 0;
-
-    while (pos + 8 <= units) {
-      const r = surr_block(v128.load(buf + (<usize>pos << 1)), prevHigh);
-      errors |= r >> 1;
-      prevHigh = r & 1;
-      pos += 8;
-    }
-
-    if (pos < units) {
-      // Tail: zero-pad the remaining <8 units into scratch. Zeros are
-      // non-surrogates, so they create no spurious pairing — and a real high
-      // surrogate as the last unit demands a low in the (zero) next slot,
-      // correctly flagging an unpaired trailing high.
-      const remaining = units - pos;
-      memory.fill(SCRATCH, 0, 16);
-      memory.copy(SCRATCH, buf + (<usize>pos << 1), <usize>remaining << 1);
-      const r = surr_block(v128.load(SCRATCH), prevHigh);
-      errors |= r >> 1;
-      prevHigh = r & 1;
-    }
-
-    // A high surrogate at the final block's last unit has no successor.
-    errors |= prevHigh;
-
-    return errors == 0;
+    if (ASC_FEATURE_SIMD && len >= SIMD_THRESHOLD) return validateUtf16Simd(buf, len);
+    return validateUtf16Swar(buf, len);
   }
 
   /** Encodes the specified string to UTF-16 bytes. */

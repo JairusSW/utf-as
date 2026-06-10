@@ -33,17 +33,20 @@ const FILES = [
 const palette = {
   stdlib: { fill: "rgba(37, 99, 235, 0.85)", border: "#1d4ed8" },
   ours:   { fill: "rgba(22, 163, 74, 0.85)", border: "#15803d" },
+  swar:   { fill: "rgba(13, 148, 136, 0.85)", border: "#0f766e" },
 };
 
 async function renderVs(direction) {
   const stdlib = FILES.map((f) => loadBench(`stdlib-${direction}-${f}`)?.mbps ?? 0);
   const ours   = FILES.map((f) => loadBench(`ours-${direction}-${f}`)?.mbps ?? 0);
-  if (stdlib.every((v) => v === 0) && ours.every((v) => v === 0)) {
+  const swar   = FILES.map((f) => loadBench(`swar-${direction}-${f}`)?.mbps ?? 0);
+  if (stdlib.every((v) => v === 0) && ours.every((v) => v === 0) && swar.every((v) => v === 0)) {
     console.log(`utf-vs-stdlib: skipping ${direction} (no data — run \`npm run bench:vs-stdlib\`)`);
     return;
   }
 
   const speedups = ours.map((o, i) => stdlib[i] > 0 ? o / stdlib[i] : 0);
+  const swarSpeedups = swar.map((o, i) => stdlib[i] > 0 ? o / stdlib[i] : 0);
 
   const cfg = {
     type: "bar",
@@ -71,6 +74,23 @@ async function renderVs(direction) {
             font: { size: 11, weight: "bold" },
             formatter: (_v, ctx) => {
               const s = speedups[ctx.dataIndex];
+              return s > 0 ? `${s.toFixed(1)}×` : "";
+            },
+          },
+        },
+        {
+          label: `UTF8.${direction} (SWAR)`,
+          data: swar,
+          backgroundColor: palette.swar.fill,
+          borderColor: palette.swar.border,
+          borderWidth: 1,
+          datalabels: {
+            anchor: "end",
+            align: "end",
+            color: "#0f766e",
+            font: { size: 11, weight: "bold" },
+            formatter: (_v, ctx) => {
+              const s = swarSpeedups[ctx.dataIndex];
               return s > 0 ? `${s.toFixed(1)}×` : "";
             },
           },

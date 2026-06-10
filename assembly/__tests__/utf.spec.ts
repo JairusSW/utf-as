@@ -1,11 +1,12 @@
 import { describe, expect, test } from "as-test";
-import {
-  utf16_length_from_utf8, utf8_length_from_utf16,
-  UTF8, UTF16
-} from "../utf";
-// SIMD kernels are not part of the package's public API (they're @inline
-// and inlined into UTF8.encode/decodeUnsafe); tests reach in directly so we
-// can exercise their pointer-level contract and error returns.
+import { UTF8, UTF16 } from "../utf";
+// The length pre-counters and SIMD kernels aren't part of the package's public
+// API (it exports only the UTF8/UTF16 namespaces), so tests import them from
+// their modules directly to exercise pointer-level contracts and error returns.
+// Every describe that calls a SIMD kernel is gated on `ASC_FEATURE_SIMD` so it —
+// and all the v128 code it reaches — dead-code-eliminates in the `--disable
+// simd` test build. The length helpers keep a scalar path and run in both modes.
+import { utf16_length_from_utf8, utf8_length_from_utf16 } from "../utf/length";
 import { utf8_to_utf16le, utf16le_to_utf8 } from "../utf/utf8";
 
 function validStr(s: string): bool {
@@ -264,7 +265,8 @@ describe("UTF8.validate / chunk-boundary edge cases", () => {
   });
 });
 
-describe("utf8_to_utf16le / valid round-trips", () => {
+// SIMD kernel exercised directly — gated so it DCEs in the nosimd build.
+if (ASC_FEATURE_SIMD) describe("utf8_to_utf16le / valid round-trips", () => {
   test("empty input", () => {
     expect(utf8_to_utf16le(0, 0, 0)).toBe(0);
   });
@@ -341,7 +343,7 @@ describe("utf8_to_utf16le / valid round-trips", () => {
   });
 });
 
-describe("utf8_to_utf16le / rejects malformed", () => {
+if (ASC_FEATURE_SIMD) describe("utf8_to_utf16le / rejects malformed", () => {
   test("rejects lone continuation", () => {
     const bytes: u8[] = [];
     for (let i = 0; i < 100; i++) bytes.push(0x41);
@@ -380,7 +382,7 @@ describe("utf8_to_utf16le / rejects malformed", () => {
   });
 });
 
-describe("utf16le_to_utf8 / valid round-trips", () => {
+if (ASC_FEATURE_SIMD) describe("utf16le_to_utf8 / valid round-trips", () => {
   test("empty input", () => {
     expect(utf16le_to_utf8(0, 0, 0)).toBe(0);
   });
@@ -442,7 +444,7 @@ describe("utf16le_to_utf8 / valid round-trips", () => {
 // Exercise the encoder's ctz-driven ASCII-run scan: place a 2-byte char at
 // every possible position 0..14 inside the leading 16-unit window so the
 // `n != 0` branches (partial-pack-then-resume) are all hit.
-describe("utf16le_to_utf8 / ASCII-run positions", () => {
+if (ASC_FEATURE_SIMD) describe("utf16le_to_utf8 / ASCII-run positions", () => {
   test("encode matches at every ASCII-run length 1..30 before a 2-byte char", () => {
     let allOk = true;
     let firstFail: i32 = -1;
@@ -488,7 +490,7 @@ describe("utf16le_to_utf8 / ASCII-run positions", () => {
   });
 });
 
-describe("utf16le_to_utf8 / rejects malformed", () => {
+if (ASC_FEATURE_SIMD) describe("utf16le_to_utf8 / rejects malformed", () => {
   test("rejects lone high surrogate", () => {
     expect(encodeUtf16Units([0x0041, 0xD800, 0x0042])).toBe(-1);
   });
@@ -669,7 +671,8 @@ describe("UTF8 namespace / round-trips through ArrayBuffer + string", () => {
     expect(UTF8.validate(buf)).toBe(false);
   });
 
-  test("encode throws on lone surrogate", () => {
+  // Direct kernel call — gated so it DCEs in the nosimd build.
+  if (ASC_FEATURE_SIMD) test("encode throws on lone surrogate", () => {
     const units: u16[] = [0x0041, 0xD800, 0x0042];
     const src = new ArrayBuffer(units.length * 2);
     const ptr = changetype<usize>(src);
@@ -775,7 +778,10 @@ describe("UTF8.encodeUnsafe / decodeUnsafe", () => {
 
 });
 
-describe("kernel edge cases", () => {
+// Direct kernel exercises + SIMD-block-straddle length cases — gated so the
+// describe DCEs in the nosimd build (the scalar length path's surrogate
+// handling is covered by the "length helpers" describe, which runs in both modes).
+if (ASC_FEATURE_SIMD) describe("kernel edge cases", () => {
   test("utf8_to_utf16le rejects negative length", () => {
     expect(utf8_to_utf16le(0, -1, 0)).toBe(-1);
   });
@@ -1031,7 +1037,7 @@ describe("UTF8 stdlib parity / decode permissive", () => {
   });
 });
 
-describe("utf8_to_utf16le / SIMD-window safety gates", () => {
+if (ASC_FEATURE_SIMD) describe("utf8_to_utf16le / SIMD-window safety gates", () => {
   // These tests place malformed bytes deep enough that they land inside the
   // SIMD inner loop, not the scalar tail, so the kernel's cheap pre-check
   // and continuation-position guard are exercised.

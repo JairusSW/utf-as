@@ -33,5 +33,18 @@
     "runtime": {
       "cmd": "node ./.as-test/runners/default.wasi.js <file>"
     }
+  },
+  "modes": {
+    "simd": {
+      "default": true
+    },
+    "nosimd": {
+      "default": true,
+      "coverage": false,
+      "buildOptions": {
+        "target": "wasi",
+        "args": ["--enable", "bulk-memory", "--disable", "simd"]
+      }
+    }
   }
 }

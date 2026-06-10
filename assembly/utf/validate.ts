@@ -3,7 +3,7 @@
 // SPE 2021). 64-byte windows of 4 × 16-byte chunks.
 
 import {
-  u8x16, MASK_0x0F, MASK_0x80, shr4_u8, prev1, prev2, prev3
+  u8x16, MASK_0x0F, MASK_0x80, shr4_u8, prev1, prev2, prev3, block_is_ascii
 } from "./common";
 
 // Error bit flags. Layout matches simdutf so the LUT constants below can be
@@ -174,6 +174,68 @@ const CARRY: u8         = TOO_SHORT | TOO_LONG | TWO_CONTS;
   return error;
 }
 
+// SIMD validation driver. Reached only when SIMD is compiled in and the input
+// is large enough to amortize the 64-byte window (see `UTF8.validateUnsafe`'s
+// dispatch). Kept as a non-`@inline` function so the v128 body is never spliced
+// into the always-compiled dispatcher: with `--enable simd` off the dispatcher's
+// `ASC_FEATURE_SIMD` guard folds false, this function is uncalled, and an uncalled
+// function is never compiled — so no v128 op is ever reached.
+// @ts-ignore: decorator
+@unsafe export function validateSimd(buf: usize, len: i32): bool {
+  let pos: i32 = 0;
+  let error = v128.splat<u8>(0);
+  let prevInput = v128.splat<u8>(0);
+  let prevIncomplete = v128.splat<u8>(0);
+
+  while (pos + 64 <= len) {
+    const basePtr = buf + <usize>pos;
+    const b0 = v128.load(basePtr);
+    const b1 = v128.load(basePtr, 16);
+    const b2 = v128.load(basePtr, 32);
+    const b3 = v128.load(basePtr, 48);
+
+    if (block_is_ascii(b0, b1, b2, b3)) {
+      // ASCII can't legitimately continue an incomplete sequence.
+      error = v128.or(error, prevIncomplete);
+      prevIncomplete = v128.splat<u8>(0);
+    } else {
+      error = check_block_subdivided(b0, b1, b2, b3, prevInput, prevIncomplete, error);
+      // is_incomplete on an all-ASCII chunk returns 0 (every byte < 0xc0),
+      // so an unconditional assignment is correct regardless of d3.
+      prevIncomplete = is_incomplete(b3);
+    }
+    prevInput = b3;
+    pos += 64;
+  }
+
+  // Tail: zero-pad ≤63 bytes into scratch and run one more block. Zeros are
+  // valid ASCII, so they neither create nor mask errors.
+  if (pos < len) {
+    const remaining = len - pos;
+    memory.fill(SCRATCH, 0, 64);
+    memory.copy(SCRATCH, buf + <usize>pos, <usize>remaining);
+
+    const b0 = v128.load(SCRATCH);
+    const b1 = v128.load(SCRATCH, 16);
+    const b2 = v128.load(SCRATCH, 32);
+    const b3 = v128.load(SCRATCH, 48);
+
+    if (block_is_ascii(b0, b1, b2, b3)) {
+      error = v128.or(error, prevIncomplete);
+    } else {
+      error = check_block_subdivided(b0, b1, b2, b3, prevInput, prevIncomplete, error);
+      prevIncomplete = is_incomplete(b3);
+      // Tail flush: at end-of-input there's no next block to provide
+      // continuation bytes, so any unfinished sequence in b3 is an error.
+      error = v128.or(error, prevIncomplete);
+    }
+  } else {
+    error = v128.or(error, prevIncomplete);
+  }
+
+  return !v128.any_true(error);
+}
+
 // --- UTF-16 ---------------------------------------------------------------
 // Well-formed UTF-16LE has no lone surrogates: every high surrogate
 // (0xD800-0xDBFF) is immediately followed by a low surrogate (0xDC00-0xDFFF),
@@ -221,6 +283,46 @@ const CARRY: u8         = TOO_SHORT | TOO_LONG | TWO_CONTS;
   const L = <u32>i16x8.bitmask(low);
   const err = L ^ (((H << 1) | prevHigh) & 0xff);
   return (err << 1) | ((H >> 7) & 1);
+}
+
+/** UTF-16LE validation driver (SIMD). Reached only when SIMD is compiled in and
+ *  the input clears the dispatch threshold (see `UTF16.validateUnsafe`); kept
+ *  non-`@inline` so its v128 body is dead-code-eliminated with `--enable simd`
+ *  off. `len` is in bytes; an odd length is malformed. Empty input is valid. */
+// @ts-ignore: decorator
+@unsafe export function validateUtf16Simd(buf: usize, len: i32): bool {
+  if (len & 1) return false; // dangling half code unit
+  const units = len >> 1;
+  if (units <= 0) return units == 0;
+
+  let pos: i32 = 0;
+  let prevHigh: u32 = 0; // 1 if the previous block ended on a high surrogate
+  let errors: u32 = 0;
+
+  while (pos + 8 <= units) {
+    const r = surr_block(v128.load(buf + (<usize>pos << 1)), prevHigh);
+    errors |= r >> 1;
+    prevHigh = r & 1;
+    pos += 8;
+  }
+
+  if (pos < units) {
+    // Tail: zero-pad the remaining <8 units into scratch. Zeros are
+    // non-surrogates, so they create no spurious pairing — and a real high
+    // surrogate as the last unit demands a low in the (zero) next slot,
+    // correctly flagging an unpaired trailing high.
+    const remaining = units - pos;
+    memory.fill(SCRATCH, 0, 16);
+    memory.copy(SCRATCH, buf + (<usize>pos << 1), <usize>remaining << 1);
+    const r = surr_block(v128.load(SCRATCH), prevHigh);
+    errors |= r >> 1;
+    prevHigh = r & 1;
+  }
+
+  // A high surrogate at the final block's last unit has no successor.
+  errors |= prevHigh;
+
+  return errors == 0;
 }
 
 /** Shared zero-padding scratch for tail blocks (64 B covers both the UTF-8

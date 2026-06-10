@@ -1,6 +1,6 @@
 {
   "name": "utf-as",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "SIMD UTF-8/UTF-16 for AssemblyScript — a drop-in for String.UTF8 / String.UTF16 with simdutf-derived 128-bit Wasm SIMD kernels.",
   "type": "module",
   "author": "Jairus Tanaka <me@jairus.dev> (https://jairus.dev/)",
@@ -56,6 +56,7 @@
     "charts": "npm run charts:build && npm run charts:serve",
     "charts:build": "bash ./scripts/build-charts.sh",
     "charts:list": "bash ./scripts/build-charts.sh --list",
+    "charts:publish": "bash ./scripts/publish-benchmarks.sh",
     "charts:serve": "npx --yes serve@latest ./charts",
     "report": "npm run bench && npm run charts:build",
     "report:vs-stdlib": "npm run bench:vs-stdlib && npm run bench:simdutf && npm run charts:build",

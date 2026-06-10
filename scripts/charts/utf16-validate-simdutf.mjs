@@ -27,7 +27,8 @@ const FILES = [
 ];
 
 const mbps = FILES.map((f) => loadBench(`utf16-validate-${f}`)?.mbps ?? 0);
-if (mbps.every((v) => v === 0)) {
+const swar = FILES.map((f) => loadBench(`utf16-validate-swar-${f}`)?.mbps ?? 0);
+if (mbps.every((v) => v === 0) && swar.every((v) => v === 0)) {
   console.log("utf16-validate-simdutf: no data (run `bash scripts/run-bench.sh utf16-validate-simdutf`)");
 } else {
   const cfg = {
@@ -35,10 +36,16 @@ if (mbps.every((v) => v === 0)) {
     data: {
       labels: FILES,
       datasets: [{
-        label: "UTF16.validate",
+        label: "UTF16.validate (SIMD)",
         data: mbps,
         backgroundColor: "rgba(234, 88, 12, 0.85)",
         borderColor: "#c2410c",
+        borderWidth: 1,
+      }, {
+        label: "UTF16.validate (SWAR)",
+        data: swar,
+        backgroundColor: "rgba(13, 148, 136, 0.85)",
+        borderColor: "#0f766e",
         borderWidth: 1,
       }],
     },
@@ -46,8 +53,8 @@ if (mbps.every((v) => v === 0)) {
       responsive: false,
       plugins: {
         title: { display: true, text: "UTF16.validate throughput on simdutf payloads", font: { size: 22, weight: "bold" } },
-        subtitle: { display: true, text: "MB/s of UTF-16 input (higher = better)", color: "#475569" },
-        legend: { display: false },
+        subtitle: { display: true, text: "MB/s of UTF-16 input (higher = better). SIMD vs SWAR.", color: "#475569" },
+        legend: { position: "top" },
         datalabels: {
           anchor: "end",
           align: "end",

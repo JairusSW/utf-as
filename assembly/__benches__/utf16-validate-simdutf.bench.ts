@@ -6,6 +6,7 @@
 
 import { bench, dumpToFile, blackbox } from "./lib/bench";
 import { UTF16 } from "../utf";
+import { validateUtf16Swar } from "../utf/validate_swar";
 import { loadPayload, Payload } from "./fixtures/simdutf_loader";
 
 const OPS: u64 = 500;
@@ -22,11 +23,20 @@ function runOne(file: string): void {
   KEEP.push(s);
   curPtr = changetype<usize>(s);
   curUnits = s.length;
+
+  // Dispatched path (SWAR below threshold, SIMD above) — effectively SIMD here.
   const desc = "utf16-validate-" + file;
   bench(desc, () => {
     blackbox(UTF16.validateUnsafe(curPtr, curUnits << 1));
   }, OPS, <u64>(curUnits << 1));
   dumpToFile(desc);
+
+  // SWAR path directly, for the swar-vs-dispatched comparison on real text.
+  const swar = "utf16-validate-swar-" + file;
+  bench(swar, () => {
+    blackbox(validateUtf16Swar(curPtr, curUnits << 1));
+  }, OPS, <u64>(curUnits << 1));
+  dumpToFile(swar);
 }
 
 runOne("arabic.html");

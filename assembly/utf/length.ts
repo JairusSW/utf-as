@@ -1,6 +1,11 @@
 // Length pre-count helpers. Assume well-formed input; pair with `UTF8.validate`
 // for untrusted sources. `utf8_length_from_utf16` returns 0 on lone surrogates
 // — disambiguate from "empty input" by checking `len`.
+//
+// Both functions are exported (so they're compiled unconditionally) yet use
+// v128. Each gates its SIMD loops behind `ASC_FEATURE_SIMD` and keeps a complete
+// scalar tail, so with `--enable simd` off the SIMD blocks fold away, the v128
+// bodies are dead-code-eliminated, and the scalar path counts the whole input.
 
 // @ts-ignore: decorator
 @lazy const SPLAT_NEG64: v128 = v128.splat<i8>(-64);
@@ -34,13 +39,19 @@ export function utf16_length_from_utf8(src: usize, len: i32): i32 {
   let contCount: i32 = 0;
   let fourByteCount: i32 = 0;
 
-  while (pos + 16 <= len) {
-    const v = v128.load(src + <usize>pos);
-    const isCont = i8x16.lt_s(v, SPLAT_NEG64);
-    contCount += popcnt<i32>(i8x16.bitmask(isCont));
-    const is4 = i8x16.eq(v128.and(v, SPLAT_F8), SPLAT_F0);
-    fourByteCount += popcnt<i32>(i8x16.bitmask(is4));
-    pos += 16;
+  // SIMD fast path, gated on compile-time SIMD availability so this exported
+  // function builds with `--enable simd` off: the block folds away and its v128
+  // body is dead-code-eliminated, leaving only the scalar tail below (which on
+  // its own counts the whole input correctly).
+  if (ASC_FEATURE_SIMD) {
+    while (pos + 16 <= len) {
+      const v = v128.load(src + <usize>pos);
+      const isCont = i8x16.lt_s(v, SPLAT_NEG64);
+      contCount += popcnt<i32>(i8x16.bitmask(isCont));
+      const is4 = i8x16.eq(v128.and(v, SPLAT_F8), SPLAT_F0);
+      fourByteCount += popcnt<i32>(i8x16.bitmask(is4));
+      pos += 16;
+    }
   }
 
   while (pos < len) {
@@ -88,40 +99,46 @@ export function utf8_length_from_utf16(src: usize, len: i32): i32 {
   let i: i32 = 0;
   let total: i32 = 0;
 
-  // Wide fast path: 32 units (64 bytes) at a time. Pure-ASCII text — the
-  // dominant byteLength input — needs only one OR-reduction + `any_true`,
-  // since each unit is exactly one UTF-8 byte. The check re-arms every chunk,
-  // so a run of accents drops to per-8 classification then resumes skipping.
-  while (i + 32 <= len) {
-    const base = src + (<usize>i << 1);
-    const v0 = v128.load(base);
-    const v1 = v128.load(base, 16);
-    const v2 = v128.load(base, 32);
-    const v3 = v128.load(base, 48);
+  // SIMD fast paths, gated on compile-time SIMD availability so this exported
+  // function builds with `--enable simd` off: both loops (and the `@inline`
+  // `utf8_bytes_of_8` they call) fold away and are dead-code-eliminated, leaving
+  // the scalar tail below to count the whole input on its own.
+  if (ASC_FEATURE_SIMD) {
+    // Wide fast path: 32 units (64 bytes) at a time. Pure-ASCII text — the
+    // dominant byteLength input — needs only one OR-reduction + `any_true`,
+    // since each unit is exactly one UTF-8 byte. The check re-arms every chunk,
+    // so a run of accents drops to per-8 classification then resumes skipping.
+    while (i + 32 <= len) {
+      const base = src + (<usize>i << 1);
+      const v0 = v128.load(base);
+      const v1 = v128.load(base, 16);
+      const v2 = v128.load(base, 32);
+      const v3 = v128.load(base, 48);
 
-    const any = v128.or(v128.or(v0, v1), v128.or(v2, v3));
-    if (!v128.any_true(v128.and(any, SPLAT_FF80_U16))) {
-      total += 32;
+      const any = v128.or(v128.or(v0, v1), v128.or(v2, v3));
+      if (!v128.any_true(v128.and(any, SPLAT_FF80_U16))) {
+        total += 32;
+        i += 32;
+        continue;
+      }
+
+      // Non-ASCII somewhere in the chunk: reuse the loaded vectors. Any bail
+      // hands the whole chunk to the scalar tail, which validates pairing.
+      const c0 = utf8_bytes_of_8(v0); if (c0 < 0) break;
+      const c1 = utf8_bytes_of_8(v1); if (c1 < 0) break;
+      const c2 = utf8_bytes_of_8(v2); if (c2 < 0) break;
+      const c3 = utf8_bytes_of_8(v3); if (c3 < 0) break;
+      total += c0 + c1 + c2 + c3;
       i += 32;
-      continue;
     }
 
-    // Non-ASCII somewhere in the chunk: reuse the loaded vectors. Any bail
-    // hands the whole chunk to the scalar tail, which validates pairing.
-    const c0 = utf8_bytes_of_8(v0); if (c0 < 0) break;
-    const c1 = utf8_bytes_of_8(v1); if (c1 < 0) break;
-    const c2 = utf8_bytes_of_8(v2); if (c2 < 0) break;
-    const c3 = utf8_bytes_of_8(v3); if (c3 < 0) break;
-    total += c0 + c1 + c2 + c3;
-    i += 32;
-  }
-
-  // Trailing 8–31 units.
-  while (i + 8 <= len) {
-    const c = utf8_bytes_of_8(v128.load(src + (<usize>i << 1)));
-    if (c < 0) break;
-    total += c;
-    i += 8;
+    // Trailing 8–31 units.
+    while (i + 8 <= len) {
+      const c = utf8_bytes_of_8(v128.load(src + (<usize>i << 1)));
+      if (c < 0) break;
+      total += c;
+      i += 8;
+    }
   }
 
   while (i < len) {

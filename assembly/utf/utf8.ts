@@ -15,7 +15,9 @@
 import { PACK_123_PTR, UTF8_BIG_INDEX_PTR, SHUF_UTF8_PTR } from "./tables";
 import { u8x16, block_is_ascii } from "./common";
 import { utf16_length_from_utf8, utf8_length_from_utf16 } from "./length";
-import { check_block_subdivided, is_incomplete, SCRATCH } from "./validate";
+import { validateSimd } from "./validate";
+import { validateSwar } from "./validate_swar";
+import { utf8_to_utf16le_swar, utf16le_to_utf8_swar } from "./utf8_swar";
 
 const E_UNPAIRED_SURROGATE: string = "String contains an unpaired surrogate";
 
@@ -91,7 +93,7 @@ const E_UNPAIRED_SURROGATE: string = "String contains an unpaired surrogate";
 
 /** Strict UTF-16LE → UTF-8 scalar. Returns bytes written, or -1 on lone/invalid surrogate. */
 // @ts-ignore: decorator
-@inline function scalar_encode(src: usize, len: i32, dst: usize): i32 {
+@inline export function scalar_encode(src: usize, len: i32, dst: usize): i32 {
   let i: i32 = 0;
   let out: usize = dst;
   while (i < len) {
@@ -141,7 +143,7 @@ const E_UNPAIRED_SURROGATE: string = "String contains an unpaired surrogate";
 /** Strict UTF-8 → UTF-16LE scalar for one code point. Returns
  *  `(units << 32) | bytes_consumed`, or `0` on malformed/truncated input. */
 // @ts-ignore: decorator
-@inline function scalar_decode_one(src: usize, remaining: i32, dst: usize): u64 {
+@inline export function scalar_decode_one(src: usize, remaining: i32, dst: usize): u64 {
   if (remaining <= 0) return 0;
   const b0 = <u32>load<u8>(src);
   if (b0 < 0x80) {
@@ -347,10 +349,11 @@ const E_UNPAIRED_SURROGATE: string = "String contains an unpaired surrogate";
   return 0;
 }
 
-/** UTF-16LE → UTF-8. Returns bytes written, or -1 on malformed.
- *  Inlined into `UTF8.encodeUnsafe`; exported for kernel-level tests. */
-// @ts-ignore: decorator
-@inline export function utf16le_to_utf8(src: usize, len: i32, dst: usize): i32 {
+/** UTF-16LE → UTF-8 (SIMD). Returns bytes written, or -1 on malformed.
+ *  Reached only when SIMD is compiled in (see `UTF8.encodeUnsafe`'s dispatch);
+ *  kept non-`@inline` so its v128 body is never spliced into the dispatcher and
+ *  is dead-code-eliminated when `--enable simd` is off. Exported for tests. */
+export function utf16le_to_utf8(src: usize, len: i32, dst: usize): i32 {
   if (len < 0) return -1;
   if (len == 0) return 0;
 
@@ -472,11 +475,12 @@ const E_UNPAIRED_SURROGATE: string = "String contains an unpaired surrogate";
   return <i32>(out - dst);
 }
 
-/** UTF-8 → UTF-16LE. Returns code units written, or -1 on malformed input
- *  (best-effort — see file header for the permissive contract).
- *  Inlined into `UTF8.decodeUnsafe`; exported for kernel-level tests. */
-// @ts-ignore: decorator
-@inline export function utf8_to_utf16le(src: usize, len: i32, dst: usize): i32 {
+/** UTF-8 → UTF-16LE (SIMD). Returns code units written, or -1 on malformed
+ *  input (best-effort — see file header for the permissive contract).
+ *  Reached only when SIMD is compiled in (see `UTF8.decodeUnsafe`'s dispatch);
+ *  kept non-`@inline` so its v128 body is never spliced into the dispatcher and
+ *  is dead-code-eliminated when `--enable simd` is off. Exported for tests. */
+export function utf8_to_utf16le(src: usize, len: i32, dst: usize): i32 {
   if (len < 0) return -1;
   if (len == 0) return 0;
 
@@ -568,8 +572,10 @@ export namespace UTF8 {
   export function byteLength(str: string, nullTerminated: bool = false): i32 {
     const len = str.length;
     if (len == 0) return i32(nullTerminated);
-    if (!nullTerminated) {
+    if (ASC_FEATURE_SIMD && !nullTerminated) {
       // SIMD precount returns 0 on lone surrogates; let the WTF8 scalar handle that.
+      // Gated on SIMD so this module still compiles with `--enable simd` off
+      // (the v128 length kernel is then dead-code-eliminated).
       const fast = utf8_length_from_utf16(changetype<usize>(str), len);
       if (fast != 0) return fast;
     }
@@ -601,10 +607,14 @@ export namespace UTF8 {
     nullTerminated: bool = false,
     errorMode: ErrorMode = ErrorMode.WTF8
   ): usize {
-    // SIMD covers the stdlib-default path. Other modes / lone surrogates →
+    // SWAR by default; SIMD only when compiled in and the input is large enough
+    // to amortize its 16-unit window (small input has no SIMD work to do). Both
+    // cover the stdlib-default path; other modes / lone surrogates fall to the
     // scalar emitter, which rewrites `buf` from the start.
     if (!nullTerminated && errorMode == ErrorMode.WTF8) {
-      const written = utf16le_to_utf8(str, len, buf);
+      const written = (ASC_FEATURE_SIMD && len >= ENCODE_SIMD_THRESHOLD)
+        ? utf16le_to_utf8(str, len, buf)
+        : utf16le_to_utf8_swar(str, len, buf);
       if (written >= 0) return <usize>written;
     }
     return scalarEncode(str, len, buf, nullTerminated, errorMode);
@@ -621,7 +631,12 @@ export namespace UTF8 {
     if (len == 0) return "";
     if (!nullTerminated) {
       const maxStr = changetype<string>(__new(len << 1, idof<string>()));
-      const units = utf8_to_utf16le(buf, <i32>len, changetype<usize>(maxStr));
+      // SWAR by default; SIMD only when compiled in and the input clears its
+      // 64-byte window. Both are byte-identical on valid input; on malformed
+      // input either may return -1 and fall through to permissive `scalarDecode`.
+      const units = (ASC_FEATURE_SIMD && len >= <usize>DECODE_SIMD_THRESHOLD)
+        ? utf8_to_utf16le(buf, <i32>len, changetype<usize>(maxStr))
+        : utf8_to_utf16le_swar(buf, <i32>len, changetype<usize>(maxStr));
       if (units >= 0) {
         return changetype<string>(
           __renew(changetype<usize>(maxStr), <usize>units << 1)
@@ -647,66 +662,44 @@ export namespace UTF8 {
     return validateUnsafe(changetype<usize>(buf), buf.byteLength);
   }
 
+  /** Smallest input (bytes) routed to the SIMD validator when SIMD is compiled
+   *  in. Below this the SWAR path wins: it skips the SIMD path's `memory.fill` +
+   *  `memory.copy` of a 64-byte scratch window and validates 8 bytes per u64.
+   *  Tuned empirically against `utf-validate-swar.bench.ts`. */
+  // @ts-ignore: decorator
+  @inline const SIMD_THRESHOLD: i32 = 64;
+
+  /** Smallest input routed to the SIMD encode/decode kernels when SIMD is
+   *  compiled in. Below these the SWAR transcoders win: the SIMD kernels do no
+   *  vector work until their window fills (encode: 16 units + 12-unit margin;
+   *  decode: 64 bytes + 16-byte margin) and otherwise run the same scalar tail.
+   *  Tuned against `utf-transcode-swar.bench.ts`. Thresholds are in code units
+   *  (encode: UTF-16 units) / bytes (decode: UTF-8 bytes).
+   *
+   *  The decode threshold favors ASCII: after the SWAR decoder's bulk-widen
+   *  rework it beats the SIMD kernel on ASCII up to ~512 B (e.g. at 256 B: ~5.9
+   *  vs ~3.5 GB/s), so 256-511 B ASCII text stays on SWAR. Mixed-script input in
+   *  that band is modestly faster on SIMD — a deliberate trade, since real decode
+   *  input skews ASCII-dominant. */
+  // @ts-ignore: decorator
+  @inline const ENCODE_SIMD_THRESHOLD: i32 = 32;
+  // @ts-ignore: decorator
+  @inline const DECODE_SIMD_THRESHOLD: i32 = 512;
+
   /** Whether `len` raw bytes at `buf` are well-formed UTF-8. Empty input is
-   *  valid. Ported from simdutf's `utf8_lookup4_algorithm.h` (Keiser–Lemire),
-   *  64-byte windows of 4 × 16-byte chunks with per-chunk ASCII subdivision. */
+   *  valid. The default path is the SWAR validator (`validate_swar.ts`); when
+   *  SIMD is compiled in (`ASC_FEATURE_SIMD`) large inputs route to the simdutf
+   *  Keiser–Lemire kernel (`validateSimd`). Both paths agree byte-for-byte.
+   *
+   *  The `ASC_FEATURE_SIMD` guard is a compile-time constant: with `--enable
+   *  simd` off it folds false, `validateSimd` is never called, and an uncalled
+   *  function is never compiled — so this module builds and runs without SIMD. */
   // @ts-ignore: decorator
   @unsafe
   export function validateUnsafe(buf: usize, len: i32): bool {
     if (len <= 0) return len == 0;
-
-    let pos: i32 = 0;
-    let error = v128.splat<u8>(0);
-    let prevInput = v128.splat<u8>(0);
-    let prevIncomplete = v128.splat<u8>(0);
-
-    while (pos + 64 <= len) {
-      const basePtr = buf + <usize>pos;
-      const b0 = v128.load(basePtr);
-      const b1 = v128.load(basePtr, 16);
-      const b2 = v128.load(basePtr, 32);
-      const b3 = v128.load(basePtr, 48);
-
-      if (block_is_ascii(b0, b1, b2, b3)) {
-        // ASCII can't legitimately continue an incomplete sequence.
-        error = v128.or(error, prevIncomplete);
-        prevIncomplete = v128.splat<u8>(0);
-      } else {
-        error = check_block_subdivided(b0, b1, b2, b3, prevInput, prevIncomplete, error);
-        // is_incomplete on an all-ASCII chunk returns 0 (every byte < 0xc0),
-        // so an unconditional assignment is correct regardless of d3.
-        prevIncomplete = is_incomplete(b3);
-      }
-      prevInput = b3;
-      pos += 64;
-    }
-
-    // Tail: zero-pad ≤63 bytes into scratch and run one more block. Zeros are
-    // valid ASCII, so they neither create nor mask errors.
-    if (pos < len) {
-      const remaining = len - pos;
-      memory.fill(SCRATCH, 0, 64);
-      memory.copy(SCRATCH, buf + <usize>pos, <usize>remaining);
-
-      const b0 = v128.load(SCRATCH);
-      const b1 = v128.load(SCRATCH, 16);
-      const b2 = v128.load(SCRATCH, 32);
-      const b3 = v128.load(SCRATCH, 48);
-
-      if (block_is_ascii(b0, b1, b2, b3)) {
-        error = v128.or(error, prevIncomplete);
-      } else {
-        error = check_block_subdivided(b0, b1, b2, b3, prevInput, prevIncomplete, error);
-        prevIncomplete = is_incomplete(b3);
-        // Tail flush: at end-of-input there's no next block to provide
-        // continuation bytes, so any unfinished sequence in b3 is an error.
-        error = v128.or(error, prevIncomplete);
-      }
-    } else {
-      error = v128.or(error, prevIncomplete);
-    }
-
-    return !v128.any_true(error);
+    if (ASC_FEATURE_SIMD && len >= SIMD_THRESHOLD) return validateSimd(buf, len);
+    return validateSwar(buf, len);
   }
 }
 
