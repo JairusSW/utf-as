@@ -5,6 +5,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-06-24
+
+### Fixed
+
+- Ship the root `index.ts` in the published package. The 0.3.0 release added it
+  so consumers could `import { UTF8, UTF16 } from "utf-as"`, but it was missing
+  from the `files` allowlist, so the tarball never included it - `asc` resolves
+  the bare `"utf-as"` specifier to `node_modules/utf-as/index.ts`, so the import
+  failed for anyone installing from the registry (it only worked through a local
+  workspace symlink). `index.ts` is now in `files`.
+
 ## [0.3.0] - 2026-06-23
 
 ### Added
