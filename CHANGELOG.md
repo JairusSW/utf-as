@@ -5,7 +5,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] - 2026-06-23
+
+### Added
+
+- `UTF8.byteLengthUnsafe(str, len, nullTerminated?)` - the pointer-based core of
+  `UTF8.byteLength`, so a caller can pre-count a UTF-16 sub-range without owning
+  a `string`. `byteLength` now delegates to it (no behaviour change).
+
+### Fixed
+
+- Root `index.ts` re-exported `"./assembly/index.ts"` with an explicit `.ts`
+  extension, which `asc` could not resolve (it appended a second `.ts`).
+  Consumers can now `import { UTF8, UTF16 } from "utf-as"` directly.
 
 ## [0.2.0] - 2026-06-10
 

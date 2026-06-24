@@ -1,6 +1,6 @@
 {
   "name": "utf-as",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "SIMD UTF-8/UTF-16 for AssemblyScript — a drop-in for String.UTF8 / String.UTF16 with simdutf-derived 128-bit Wasm SIMD kernels.",
   "type": "module",
   "author": "Jairus Tanaka <me@jairus.dev> (https://jairus.dev/)",
@@ -65,14 +65,14 @@
     "prepublishOnly": "npm test"
   },
   "devDependencies": {
-    "@assemblyscript/wasi-shim": "latest",
-    "@types/node": "latest",
-    "as-heap-analyzer": "latest",
-    "as-test": "latest",
-    "assemblyscript": "latest",
-    "chart.js": "latest",
-    "chartjs-node-canvas": "latest",
-    "chartjs-plugin-datalabels": "latest"
+    "@assemblyscript/wasi-shim": "^0.1.0",
+    "@types/node": "^26.0.0",
+    "as-heap-analyzer": "^1.2.0",
+    "as-test": "^1.8.0",
+    "assemblyscript": "^0.28.19",
+    "chart.js": "^4.5.1",
+    "chartjs-node-canvas": "^5.0.0",
+    "chartjs-plugin-datalabels": "^2.2.0"
   },
   "peerDependencies": {
     "assemblyscript": ">=0.27.0"

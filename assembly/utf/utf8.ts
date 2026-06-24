@@ -570,16 +570,23 @@ export namespace UTF8 {
 
   /** Calculates the byte length of the specified string when encoded as UTF-8, optionally null terminated. */
   export function byteLength(str: string, nullTerminated: bool = false): i32 {
-    const len = str.length;
+    return byteLengthUnsafe(changetype<usize>(str), str.length, nullTerminated);
+  }
+
+  /** Byte length of `len` raw UTF-16 code units at `str` when encoded as UTF-8,
+   *  optionally null terminated. The pointer-based core of `byteLength`; lets a
+   *  caller pre-count a sub-range without owning a `string`. */
+  // @ts-ignore: decorator
+  @unsafe export function byteLengthUnsafe(str: usize, len: i32, nullTerminated: bool = false): i32 {
     if (len == 0) return i32(nullTerminated);
     if (ASC_FEATURE_SIMD && !nullTerminated) {
       // SIMD precount returns 0 on lone surrogates; let the WTF8 scalar handle that.
       // Gated on SIMD so this module still compiles with `--enable simd` off
       // (the v128 length kernel is then dead-code-eliminated).
-      const fast = utf8_length_from_utf16(changetype<usize>(str), len);
+      const fast = utf8_length_from_utf16(str, len);
       if (fast != 0) return fast;
     }
-    return scalarByteLength(changetype<usize>(str), len, nullTerminated);
+    return scalarByteLength(str, len, nullTerminated);
   }
 
   /** Encodes the specified string to UTF-8 bytes, optionally null terminated. ErrorMode defaults to WTF-8. */
