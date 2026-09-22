@@ -104,6 +104,22 @@ describe("SWAR validate / valid minimal cases", () => {
   });
 });
 
+describe("SWAR validate / packed two-byte words", () => {
+  test("accepts four pairs at both range boundaries", () => {
+    expect(agree(put([0xC2, 0x80, 0xDF, 0xBF, 0xC3, 0xA9, 0xC2, 0xBF]))).toBe(true);
+  });
+  test("rejects every invalid lead position", () => {
+    const leads: u8[] = [0xC0, 0xC1, 0xE0, 0xF0];
+    for (let pos = 0; pos < 4; pos++) {
+      for (let kind = 0; kind < leads.length; kind++) {
+        const bytes: u8[] = [0xC3, 0xA9, 0xC3, 0xA9, 0xC3, 0xA9, 0xC3, 0xA9];
+        bytes[pos << 1] = leads[kind];
+        expect(agree(put(bytes))).toBe(false);
+      }
+    }
+  });
+});
+
 // --- Size sweep across the dispatch threshold (64) -------------------------
 describe("SWAR validate / size sweep × offset", () => {
   test("pure ASCII at every length", () => {
@@ -239,6 +255,10 @@ describe("SWAR UTF-16 validate / vs reference", () => {
     expect(agree16(putU16([0xD800, 0xD800]))).toBe(false);          // high+high
     expect(agree16(putU16([0x0041, 0xDC00, 0x0042]))).toBe(false);  // lone low mid-string
     expect(UTF16.validateUnsafe(BUF, 3)).toBe(false);               // odd byte length
+  });
+  test("paired words across a word boundary", () => {
+    expect(agree16(putU16([0x0041, 0x0042, 0x0043, 0xD83D, 0xDE00, 0xD83C, 0xDF0D, 0xD800, 0xDC00]))).toBe(true);
+    expect(agree16(putU16([0x0041, 0x0042, 0x0043, 0xD83D, 0xDE00, 0xD83C, 0x0041, 0xD800, 0xDC00]))).toBe(false);
   });
 });
 
