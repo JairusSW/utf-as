@@ -584,6 +584,30 @@ export function utf8_to_utf16le(src: usize, len: i32, dst: usize): i32 {
   return <i32>((out - dst) >> 1);
 }
 
+// Pure ASCII can use the v128 decoder's 16-byte widen even below its ordinary
+// mixed-text crossover. Stop scanning at the first high byte.
+function isAsciiUtf8(src: usize, len: i32): bool {
+  let i: i32 = 0;
+  while (i + 64 <= len) {
+    const p = src + <usize>i;
+    if (!block_is_ascii(v128.load(p), v128.load(p, 16), v128.load(p, 32), v128.load(p, 48))) return false;
+    i += 64;
+  }
+  while (i + 16 <= len) {
+    if (i8x16.bitmask(v128.load(src + <usize>i)) != 0) return false;
+    i += 16;
+  }
+  while (i + 8 <= len) {
+    if (load<u64>(src + <usize>i) & 0x8080808080808080) return false;
+    i += 8;
+  }
+  while (i < len) {
+    if (load<u8>(src + <usize>i) & 0x80) return false;
+    i++;
+  }
+  return true;
+}
+
 /** Encoding helpers for UTF-8. */
 export namespace UTF8 {
   /** UTF-8 encoding error modes. */
@@ -666,10 +690,11 @@ export namespace UTF8 {
     if (len == 0) return "";
     if (!nullTerminated) {
       const maxStr = changetype<string>(__new(len << 1, idof<string>()));
-      // SWAR by default; SIMD only when compiled in and the input clears its
-      // 64-byte window. Both are byte-identical on valid input; on malformed
-      // input either may return -1 and fall through to permissive `scalarDecode`.
-      const units = (ASC_FEATURE_SIMD && len >= <usize>DECODE_SIMD_THRESHOLD)
+      // SWAR by default; SIMD on large or pure ASCII input. Both are
+      // byte-identical on valid input; on malformed input either may return -1
+      // and fall through to permissive `scalarDecode`.
+      const units = (ASC_FEATURE_SIMD && (len >= <usize>DECODE_SIMD_THRESHOLD
+        || (len >= 256 && !(load<u8>(buf) & 0x80) && isAsciiUtf8(buf, <i32>len))))
         ? utf8_to_utf16le(buf, <i32>len, changetype<usize>(maxStr))
         : utf8_to_utf16le_swar(buf, <i32>len, changetype<usize>(maxStr));
       if (units >= 0) {
@@ -709,11 +734,9 @@ export namespace UTF8 {
    *  16 units; shorter strings use SWAR. Thresholds are in code units
    *  (encode: UTF-16 units) / bytes (decode: UTF-8 bytes).
    *
-   *  The decode threshold favors ASCII: after the SWAR decoder's bulk-widen
-   *  rework it beats the SIMD kernel on ASCII up to ~512 B (e.g. at 256 B: ~5.9
-   *  vs ~3.5 GB/s), so 256-511 B ASCII text stays on SWAR. Mixed-script input in
-   *  that band is modestly faster on SIMD — a deliberate trade, since real decode
-   *  input skews ASCII-dominant. */
+   *  Pure ASCII uses SIMD from 256 bytes after a v128 scan. Shorter inputs
+   *  use SWAR because the scan costs more than the SIMD conversion saves on
+   *  ARM64. Mixed input uses the ordinary 512-byte crossover. */
   // @ts-ignore: decorator
   @inline const ENCODE_SIMD_THRESHOLD: i32 = 16;
   // @ts-ignore: decorator

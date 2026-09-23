@@ -130,6 +130,12 @@ describe("SWAR transcode / ascii size sweep", () => {
       s += String.fromCharCode(0x41 + (n % 26));
     }
   });
+  test("decode dispatch at 256 and 512 bytes", () => {
+    for (let n = 255; n <= 257; n++) roundTrip("a".repeat(n));
+    for (let n = 511; n <= 513; n++) roundTrip("a".repeat(n));
+    roundTrip("a".repeat(255) + "é");
+    roundTrip("é" + "a".repeat(255));
+  });
 });
 
 // Multibyte char placed at every offset within a long ASCII run — exercises the
