@@ -4,8 +4,9 @@
 // (which the SIMD kernels can't accelerate below their 64-byte window anyway).
 //
 // Each kernel is a hybrid: an ASCII fast path that processes 8 code units /
-// bytes per u64 word, falling back to the existing strict scalar coders
-// (`scalar_decode_one` / `scalar_encode`) for the multibyte parts. On valid
+// bytes per u64 word. The decoder also widens four two-byte sequences per
+// word; remaining multibyte parts use the strict scalar coders
+// (`scalar_decode_one` / `scalar_encode`). On valid
 // input the output is byte-identical to the SIMD kernels; the decode path
 // keeps the same "strict here, permissive scalar fallback in the caller"
 // contract (returns -1 on malformed, the caller retries via `scalarDecode`).
@@ -37,6 +38,16 @@ const HI16: u64 = 0xFF80FF80FF80FF80;
     | ((x >> 8) & 0xFF00)
     | ((x >> 16) & 0xFF0000)
     | ((x >> 24) & 0xFF000000));
+}
+
+/** Decode four complete C2..DF 80..BF pairs into four UTF-16 lanes.
+ *  Returns all ones when another byte pattern needs the scalar decoder. */
+// @ts-ignore: decorator
+@inline function decode2Word(w: u64): u64 {
+  if ((w & 0xC0E0C0E0C0E0C0E0) != 0x80C080C080C080C0) return ~<u64>0;
+  const validLeads = w & 0x001E001E001E001E;
+  if (((validLeads - 0x0001000100010001) & ~validLeads & 0x0080008000800080) != 0) return ~<u64>0;
+  return ((w & 0x001F001F001F001F) << 6) | ((w >> 8) & 0x003F003F003F003F);
 }
 
 /** UTF-8 → UTF-16LE, SWAR. Returns code units written, or -1 on malformed
@@ -74,6 +85,13 @@ const HI16: u64 = 0xFF80FF80FF80FF80;
       pos += 8;
       continue;
     }
+    const decoded = decode2Word(w0);
+    if (decoded != ~<u64>0) {
+      store<u64>(out, decoded);
+      out += 8;
+      pos += 8;
+      continue;
+    }
     // w0 dirty: widen its ASCII prefix in bulk, then decode the multibyte run.
     let k = <i32>(ctz(w0 & HI) >> 3);
     pos += k;
@@ -97,6 +115,13 @@ const HI16: u64 = 0xFF80FF80FF80FF80;
       store<u64>(out, widenLo(w));
       store<u64>(out, widenLo(w >> 32), 8);
       out += 16;
+      pos += 8;
+      continue;
+    }
+    const decoded = decode2Word(w);
+    if (decoded != ~<u64>0) {
+      store<u64>(out, decoded);
+      out += 8;
       pos += 8;
       continue;
     }

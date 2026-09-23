@@ -19,6 +19,7 @@ import { utf8_to_utf16le, utf16le_to_utf8 } from "../utf/utf8";
 // Output scratch — large enough for any test string below.
 const A: usize = memory.data(8192);
 const B: usize = memory.data(8192);
+const PACKED_SRC: usize = memory.data(16);
 
 function bytesEq(p: usize, q: usize, n: i32): bool {
   for (let i = 0; i < n; i++) {
@@ -92,6 +93,30 @@ describe("SWAR transcode / representative round-trips", () => {
   test("empty", () => { roundTrip(""); });
   test("single chars", () => {
     roundTrip("a"); roundTrip("é"); roundTrip("世"); roundTrip("🌍");
+  });
+});
+
+describe("SWAR transcode / packed two-byte words", () => {
+  test("decodes boundary code points in both word loops", () => {
+    const bytes: u8[] = [0xC2, 0x80, 0xDF, 0xBF, 0xC3, 0xA9, 0xC2, 0xBF];
+    const points: u16[] = [0x80, 0x7FF, 0xE9, 0xBF];
+    for (let k = 0; k < 16; k++) store<u8>(PACKED_SRC + <usize>k, bytes[k & 7]);
+    expect(utf8_to_utf16le_swar(PACKED_SRC, 8, A)).toBe(4);
+    expect(utf8_to_utf16le_swar(PACKED_SRC, 16, B)).toBe(8);
+    for (let k = 0; k < 8; k++) {
+      expect(<u16>load<u16>(B + (<usize>k << 1))).toBe(points[k & 3]);
+      if (k < 4) expect(<u16>load<u16>(A + (<usize>k << 1))).toBe(points[k]);
+    }
+  });
+  test("rejects overlong and longer leads in every position", () => {
+    const invalid: u8[] = [0xC0, 0xC1, 0xE0, 0xF0];
+    for (let pos = 0; pos < 4; pos++) {
+      for (let kind = 0; kind < invalid.length; kind++) {
+        for (let k = 0; k < 8; k++) store<u8>(PACKED_SRC + <usize>k, (k & 1) == 0 ? 0xC3 : 0xA9);
+        store<u8>(PACKED_SRC + <usize>(pos << 1), invalid[kind]);
+        expect(utf8_to_utf16le_swar(PACKED_SRC, 8, A)).toBe(-1);
+      }
+    }
   });
 });
 
