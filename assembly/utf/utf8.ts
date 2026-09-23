@@ -469,6 +469,26 @@ export function utf16le_to_utf8(src: usize, len: i32, dst: usize): i32 {
     i += 8;
   }
 
+  // The main loop reserves room for its packed stores. Finish full ASCII
+  // vectors with exact-width stores before handing a mixed tail to scalar.
+  while (i + 16 <= len) {
+    const p = src + (<usize>i << 1);
+    const lo = v128.load(p);
+    const hi = v128.load(p, 16);
+    if (v128.any_true(v128.and(v128.or(lo, hi), SPLAT_FF80))) break;
+    v128.store(out, i8x16.narrow_i16x8_u(lo, hi));
+    i += 16;
+    out += 16;
+  }
+  if (i + 8 <= len) {
+    const p = src + (<usize>i << 1);
+    const block = v128.load(p);
+    if (!v128.any_true(v128.and(block, SPLAT_FF80))) {
+      v128.store64_lane(out, i8x16.narrow_i16x8_u(block, block), 0);
+      i += 8;
+      out += 8;
+    }
+  }
   const written = scalar_encode(src + (<usize>i << 1), len - i, out);
   if (written < 0) return -1;
   out += <usize>written;
@@ -623,7 +643,7 @@ export namespace UTF8 {
     errorMode: ErrorMode = ErrorMode.WTF8
   ): usize {
     // SWAR by default; SIMD only when compiled in and the input is large enough
-    // to amortize its 16-unit window (small input has no SIMD work to do). Both
+    // to amortize vector setup. Both
     // cover the stdlib-default path; other modes / lone surrogates fall to the
     // scalar emitter, which rewrites `buf` from the start.
     if (!nullTerminated && errorMode == ErrorMode.WTF8) {
@@ -685,10 +705,8 @@ export namespace UTF8 {
   @inline const SIMD_THRESHOLD: i32 = 64;
 
   /** Smallest input routed to the SIMD encode/decode kernels when SIMD is
-   *  compiled in. Below these the SWAR transcoders win: the SIMD kernels do no
-   *  vector work until their window fills (encode: 16 units + 12-unit margin;
-   *  decode: 64 bytes + 16-byte margin) and otherwise run the same scalar tail.
-   *  Tuned against `utf-transcode-swar.bench.ts`. Thresholds are in code units
+   *  compiled in. The encoder uses exact-width v128 ASCII tail stores from
+   *  16 units; shorter strings use SWAR. Thresholds are in code units
    *  (encode: UTF-16 units) / bytes (decode: UTF-8 bytes).
    *
    *  The decode threshold favors ASCII: after the SWAR decoder's bulk-widen
@@ -697,7 +715,7 @@ export namespace UTF8 {
    *  that band is modestly faster on SIMD — a deliberate trade, since real decode
    *  input skews ASCII-dominant. */
   // @ts-ignore: decorator
-  @inline const ENCODE_SIMD_THRESHOLD: i32 = 32;
+  @inline const ENCODE_SIMD_THRESHOLD: i32 = 16;
   // @ts-ignore: decorator
   @inline const DECODE_SIMD_THRESHOLD: i32 = 512;
 
