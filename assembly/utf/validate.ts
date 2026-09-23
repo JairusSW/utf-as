@@ -307,16 +307,28 @@ const CARRY: u8         = TOO_SHORT | TOO_LONG | TWO_CONTS;
   }
 
   if (pos < units) {
-    // Tail: zero-pad the remaining <8 units into scratch. Zeros are
-    // non-surrogates, so they create no spurious pairing — and a real high
-    // surrogate as the last unit demands a low in the (zero) next slot,
-    // correctly flagging an unpaired trailing high.
     const remaining = units - pos;
-    memory.fill(SCRATCH, 0, 16);
-    memory.copy(SCRATCH, buf + (<usize>pos << 1), <usize>remaining << 1);
-    const r = surr_block(v128.load(SCRATCH), prevHigh);
-    errors |= r >> 1;
-    prevHigh = r & 1;
+    if (remaining <= 4) {
+      // A short scalar tail is cheaper than padding and copying a block.
+      while (pos < units) {
+        const cls = load<u16>(buf + (<usize>pos << 1)) & 0xFC00;
+        if (prevHigh) {
+          errors |= u32(cls != 0xDC00);
+          prevHigh = 0;
+        } else if (cls == 0xD800) {
+          prevHigh = 1;
+        } else if (cls == 0xDC00) {
+          errors |= 1;
+        }
+        pos++;
+      }
+    } else {
+      memory.fill(SCRATCH, 0, 16);
+      memory.copy(SCRATCH, buf + (<usize>pos << 1), <usize>remaining << 1);
+      const r = surr_block(v128.load(SCRATCH), prevHigh);
+      errors |= r >> 1;
+      prevHigh = r & 1;
+    }
   }
 
   // A high surrogate at the final block's last unit has no successor.
