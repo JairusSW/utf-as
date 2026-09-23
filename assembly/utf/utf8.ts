@@ -544,6 +544,14 @@ export function utf8_to_utf16le(src: usize, len: i32, dst: usize): i32 {
     }
   }
 
+  while (pos + 16 <= len) {
+    const block = v128.load(src + <usize>pos);
+    if (i8x16.bitmask(block) != 0) break;
+    store_ascii_as_utf16le(block, out);
+    pos += 16;
+    out += 32;
+  }
+
   while (pos < len) {
     const ret = scalar_decode_one(src + <usize>pos, len - pos, out);
     if (ret == 0) return -1;
