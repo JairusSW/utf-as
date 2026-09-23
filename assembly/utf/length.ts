@@ -44,6 +44,16 @@ export function utf16_length_from_utf8(src: usize, len: i32): i32 {
   // body is dead-code-eliminated, leaving only the scalar tail below (which on
   // its own counts the whole input correctly).
   if (ASC_FEATURE_SIMD) {
+    while (pos + 64 <= len) {
+      const base = src + <usize>pos;
+      const b0 = v128.load(base);
+      const b1 = v128.load(base, 16);
+      const b2 = v128.load(base, 32);
+      const b3 = v128.load(base, 48);
+      const any = v128.or(v128.or(b0, b1), v128.or(b2, b3));
+      if (i8x16.bitmask(any) != 0) break;
+      pos += 64;
+    }
     while (pos + 16 <= len) {
       const v = v128.load(src + <usize>pos);
       const isCont = i8x16.lt_s(v, SPLAT_NEG64);
