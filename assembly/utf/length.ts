@@ -92,28 +92,26 @@ export function utf16_length_from_utf8(src: usize, len: i32): i32 {
 
 /** UTF-8 byte count for 8 UTF-16 units, or -1 to bail to scalar.
  *  Baseline = 1 byte/unit, +1 per unit ≥ 0x80, +1 per unit ≥ 0x800 — which
- *  scores each surrogate as 3. The surrogate fix-up (high 3→4, low 3→0) only
- *  runs when the cheap `any_true` gate finds one, so non-surrogate text (the
- *  common case) skips two bitmask/popcnt pairs and the pairing arithmetic. */
+ *  scores each surrogate as 3. A valid pair takes 4 bytes, so subtract 2
+ *  per pair after checking adjacency. Non-surrogate text skips the fix-up. */
 // @ts-ignore: decorator
 @inline function utf8_bytes_of_8(v: v128): i32 {
   const ge80 = i16x8.ge_u(v, SPLAT_80_U16);
   const ge800 = i16x8.ge_u(v, SPLAT_800_U16);
-  // Each i16 lane occupies 2 bitmask bits; popcnt >> 1 = true-lane count.
   let bytes = 8
-    + (popcnt<i32>(<u32>i8x16.bitmask(ge80)) >> 1)
-    + (popcnt<i32>(<u32>i8x16.bitmask(ge800)) >> 1);
+    + popcnt<i32>(i16x8.bitmask(ge80))
+    + popcnt<i32>(i16x8.bitmask(ge800));
 
   const isSurr = i16x8.eq(v128.and(v, SPLAT_F800_U16), SPLAT_D800_U16);
-  if (v128.any_true(isSurr)) {
+  const surrMask = <u32>i16x8.bitmask(isSurr);
+  if (surrMask) {
     const isLowSurr = i16x8.eq(v128.and(v, SPLAT_FC00_U16), SPLAT_DC00_U16);
-    const isHighSurr = v128.andnot(isSurr, isLowSurr);
-    const lanes_low = popcnt<i32>(<u32>i8x16.bitmask(isLowSurr)) >> 1;
-    const lanes_high = popcnt<i32>(<u32>i8x16.bitmask(isHighSurr)) >> 1;
-    // Mismatched counts ⇒ lone surrogate or pair straddling the block
-    // boundary — bail to scalar so the lookback can run.
-    if (lanes_low != lanes_high) return -1;
-    bytes += lanes_high - 3 * lanes_low;
+    const lowMask = <u32>i16x8.bitmask(isLowSurr);
+    const highMask = surrMask ^ lowMask;
+    // Counts alone miss a lone high and low in the same block. Require each
+    // low to immediately follow a high; let scalar handle a boundary pair.
+    if (lowMask != (highMask << 1)) return -1;
+    bytes -= 2 * popcnt<i32>(lowMask);
   }
   return bytes;
 }

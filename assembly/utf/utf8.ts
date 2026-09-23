@@ -608,6 +608,76 @@ function isAsciiUtf8(src: usize, len: i32): bool {
   return true;
 }
 
+// The SIMD/SWAR encoder wins clearly on ASCII in REPLACE/ERROR mode, while the
+// scalar emitter is faster on mixed text in those modes. Scan u64 words and
+// stop at the first non-ASCII code unit; WTF8 keeps its existing dispatch.
+// @ts-ignore: decorator
+@inline function isAsciiUtf16(src: usize, len: i32): bool {
+  let i: i32 = 0;
+  while (i + 4 <= len) {
+    if (load<u64>(src + (<usize>i << 1)) & 0xFF80FF80FF80FF80) return false;
+    i += 4;
+  }
+  while (i < len) {
+    if (load<u16>(src + (<usize>i << 1)) >= 0x80) return false;
+    i++;
+  }
+  return true;
+}
+
+// Dense 3-byte/surrogate text spends more time in the SIMD converter's slow
+// lanes than the scalar emitter. A leading sample catches CJK/emoji runs
+// without adding a full pre-scan to the common ASCII and Latin paths.
+// @ts-ignore: decorator
+@inline function hasDenseWideUtf16(src: usize, len: i32): bool {
+  if (len < 16) return false;
+  const first = load<u64>(src);
+  if ((first & 0xF800F800F800F800) == 0) return false;
+  let wide: i32 = 0;
+  for (let i: i32 = 0; i < 16; i++) {
+    wide += i32(load<u16>(src + (<usize>i << 1)) >= 0x800);
+    if (wide >= 4) return true;
+  }
+  return false;
+}
+
+// Four UTF-16 surrogate pairs -> four packed UTF-8 code points. Each u32 lane
+// holds [high:u16, low:u16] in little-endian memory order. When the next block
+// is not all pairs, the scalar emitter handles the remainder in the same mode.
+// Kept out of the no-SIMD build by the ASC_FEATURE_SIMD call-site guard.
+function encodeSurrogatePairsSimd(src: usize, len: i32, dst: usize, errorMode: UTF8.ErrorMode): usize {
+  let i: i32 = 0;
+  let out = dst;
+  const pairClass = v128.splat<u32>(0xDC00D800);
+  const classMask = v128.splat<u16>(0xFC00);
+  const low16 = v128.splat<u32>(0xFFFF);
+  const mask3ff = v128.splat<u32>(0x3FF);
+  const byte1 = v128.splat<u32>(0x3F000);
+  const byte2 = v128.splat<u32>(0xFC0);
+  const byte3 = v128.splat<u32>(0x3F);
+  const utf8Base = v128.splat<u32>(0x808080F0);
+
+  while (i + 8 <= len) {
+    const pairs = v128.load(src + (<usize>i << 1));
+    if (i16x8.bitmask(i16x8.eq(v128.and(pairs, classMask), pairClass)) != 0xFF) break;
+    const high = v128.and(pairs, low16);
+    const low = v128.shr<u32>(pairs, 16);
+    const cp = i32x4.add(
+      v128.or(v128.shl<u32>(v128.and(high, mask3ff), 10), v128.and(low, mask3ff)),
+      SPLAT_10000
+    );
+    const utf8 = v128.or(utf8Base, v128.or(
+      v128.or(v128.shr<u32>(cp, 18), v128.shr<u32>(v128.and(cp, byte1), 4)),
+      v128.or(v128.shl<u32>(v128.and(cp, byte2), 10),
+              v128.shl<u32>(v128.and(cp, byte3), 24))
+    ));
+    v128.store(out, utf8);
+    out += 16;
+    i += 8;
+  }
+  return out - dst + scalarEncode(src + (<usize>i << 1), len - i, out, false, errorMode);
+}
+
 /** Encoding helpers for UTF-8. */
 export namespace UTF8 {
   /** UTF-8 encoding error modes. */
@@ -666,11 +736,18 @@ export namespace UTF8 {
     nullTerminated: bool = false,
     errorMode: ErrorMode = ErrorMode.WTF8
   ): usize {
+    if (ASC_FEATURE_SIMD && !nullTerminated && len >= 8
+      && (load<u32>(str) & 0xFC00FC00) == 0xDC00D800) {
+      return encodeSurrogatePairsSimd(str, len, buf, errorMode);
+    }
     // SWAR by default; SIMD only when compiled in and the input is large enough
-    // to amortize vector setup. Both
-    // cover the stdlib-default path; other modes / lone surrogates fall to the
-    // scalar emitter, which rewrites `buf` from the start.
-    if (!nullTerminated && errorMode == ErrorMode.WTF8) {
+    // to amortize vector setup. The transcoder wins on ASCII and Latin input;
+    // dense 3-byte/surrogate
+    // text favors scalar. REPLACE/ERROR use the transcoder only on ASCII.
+    // A lone surrogate returns -1 and scalar rewrites the buffer.
+    if (!nullTerminated && (errorMode == ErrorMode.WTF8
+      ? !hasDenseWideUtf16(str, len)
+      : isAsciiUtf16(str, len))) {
       const written = (ASC_FEATURE_SIMD && len >= ENCODE_SIMD_THRESHOLD)
         ? utf16le_to_utf8(str, len, buf)
         : utf16le_to_utf8_swar(str, len, buf);
@@ -691,8 +768,8 @@ export namespace UTF8 {
     if (!nullTerminated) {
       const maxStr = changetype<string>(__new(len << 1, idof<string>()));
       // SWAR by default; SIMD on large or pure ASCII input. Both are
-      // byte-identical on valid input; on malformed input either may return -1
-      // and fall through to permissive `scalarDecode`.
+      // byte-identical on valid input; on malformed
+      // input either may return -1 and fall through to permissive `scalarDecode`.
       const units = (ASC_FEATURE_SIMD && (len >= <usize>DECODE_SIMD_THRESHOLD
         || (len >= 256 && !(load<u8>(buf) & 0x80) && isAsciiUtf8(buf, <i32>len))))
         ? utf8_to_utf16le(buf, <i32>len, changetype<usize>(maxStr))
@@ -730,8 +807,9 @@ export namespace UTF8 {
   @inline const SIMD_THRESHOLD: i32 = 64;
 
   /** Smallest input routed to the SIMD encode/decode kernels when SIMD is
-   *  compiled in. The encoder uses exact-width v128 ASCII tail stores from
-   *  16 units; shorter strings use SWAR. Thresholds are in code units
+   *  compiled in. The encoder's exact-width vector tail handles short ASCII
+   *  input; shorter strings stay on SWAR. The decoder uses a 64-byte main
+   *  window and a 16-byte ASCII tail. Thresholds are in code units
    *  (encode: UTF-16 units) / bytes (decode: UTF-8 bytes).
    *
    *  Pure ASCII uses SIMD from 256 bytes after a v128 scan. Shorter inputs
