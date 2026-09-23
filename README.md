@@ -206,16 +206,23 @@ supplementary-plane sequences make both public conversions slower than the
 stdlib, while validation also falls below the HTML rates.
 
 The optional Wide validators were measured separately on a Ryzen 7 7800X3D
-with Wago and its Wide plugin, using the premerge `13f46c7` tree that was
-merged into `b3c5fab`. Each call validates 4 KiB; times below are per call
-from repeated batches of 100 validations.
+with Wago and its Wide plugin, using main at `ea63681`. Each call validates
+4 KiB; times below are per call, calculated from three runs of repeated
+batches of 100 validations.
 
 | UTF-8 input | SWAR | v128 | Wide 256 | Wide 512 |
 |---|---:|---:|---:|---:|
-| ASCII | 95 ns | 94 ns | 192 ns | 192 ns |
-| Latin | 620 ns | 676 ns | 18.0 µs | 10.6 µs |
-| CJK | 3.34 µs | 673 ns | 18.0 µs | 10.6 µs |
-| Emoji | 2.74 µs | 668 ns | 18.1 µs | 10.7 µs |
+| ASCII | 94 ns | 94 ns | 193 ns | 192 ns |
+| Latin | 622 ns | 671 ns | 18.1 µs | 10.5 µs |
+| CJK | 3.34 µs | 672 ns | 18.0 µs | 10.5 µs |
+| Emoji | 2.74 µs | 668 ns | 18.1 µs | 10.5 µs |
+
+| UTF-16 input | SWAR | v128 | Wide 256 | Wide 512 |
+|---|---:|---:|---:|---:|
+| ASCII | 785 ns | 300 ns | 2.83 µs | 2.12 µs |
+| Latin | 787 ns | 298 ns | 2.84 µs | 2.11 µs |
+| CJK | 786 ns | 298 ns | 2.84 µs | 2.11 µs |
+| Emoji | 471 ns | 501 ns | 2.84 µs | 2.11 µs |
 
 The published as-simd transform currently lowers only three v256 operations
 and no v512 operations in this module. Most Wide validation work therefore
