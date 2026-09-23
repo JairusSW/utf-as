@@ -271,16 +271,16 @@ const CARRY: u8         = TOO_SHORT | TOO_LONG | TWO_CONTS;
 @inline export function surr_block(v: v128, prevHigh: u32): u32 {
   // surrogate iff (v & 0xf800) == 0xd800.
   const surr = i16x8.eq(v128.and(v, SPLAT_F800_U16), SPLAT_D800_SURR);
-  if (i16x8.bitmask(surr) == 0) {
+  const S = <u32>i16x8.bitmask(surr);
+  if (S == 0) {
     // No surrogates → H = L = 0. Error contribution is the unfulfilled carry
     // (expectedLow == prevHigh, L == 0); carry-out is 0.
     return prevHigh << 1;
   }
   // low iff (v & 0xfc00) == 0xdc00; high is a surrogate that isn't low.
   const low = i16x8.eq(v128.and(v, SPLAT_FC00_U16), SPLAT_DC00_LOW);
-  const high = v128.and(surr, v128.not(low));
-  const H = <u32>i16x8.bitmask(high);
   const L = <u32>i16x8.bitmask(low);
+  const H = S ^ L;
   const err = L ^ (((H << 1) | prevHigh) & 0xff);
   return (err << 1) | ((H >> 7) & 1);
 }
