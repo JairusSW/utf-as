@@ -233,7 +233,7 @@ build_v8() {
   local file="$1"
   local output="$2"
 
-  npx asc "$file" -o "${output}.tmp" -O3 --converge --noAssert --uncheckedBehavior always --runtime incremental --enable bulk-memory --enable simd --exportStart start --exportRuntime "${MEMORY_ASC_ARGS[@]}"
+  npx asc "$file" -o "${output}.tmp" -O3 --converge --noAssert --uncheckedBehavior always --runtime incremental --enable bulk-memory --enable simd --exportStart start --exportRuntime ${MEMORY_ASC_ARGS[@]+"${MEMORY_ASC_ARGS[@]}"}
   optimize_or_fallback "${output}.tmp" "$output" --enable-bulk-memory --enable-simd --enable-nontrapping-float-to-int --enable-tail-call -tnh -iit -ifwl -s 0 -O4
 }
 
@@ -242,7 +242,7 @@ build_wasi() {
   local output="$2"
   local runtime_flag="$3"
 
-  npx asc "$file" -o "$output" -O3 --converge --noAssert --uncheckedBehavior always --runtime incremental --config ./node_modules/@assemblyscript/wasi-shim/asconfig.json --use "$runtime_flag=1" --enable bulk-memory --enable simd --exportRuntime "${MEMORY_ASC_ARGS[@]}"
+  npx asc "$file" -o "$output" -O3 --converge --noAssert --uncheckedBehavior always --runtime incremental --config ./node_modules/@assemblyscript/wasi-shim/asconfig.json --use "$runtime_flag=1" --enable bulk-memory --enable simd --exportRuntime ${MEMORY_ASC_ARGS[@]+"${MEMORY_ASC_ARGS[@]}"}
 }
 
 for file in "${FILES[@]}"; do

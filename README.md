@@ -28,12 +28,12 @@
 
 This library ports simdutf's westmere SSE4 UTF-8 kernels to 128-bit Wasm SIMD and exposes them through the same namespace shape, so you can swap them in by changing the import. It also includes fast validators for both UTF-8 and UTF-16.
 
-- `UTF8.decode`  →  2-7× faster than `String.UTF8.decode`
-- `UTF8.encode`  →  8-13× faster than `String.UTF8.encode`
-- `UTF8.validate`  →  up to 58 GB/s on ASCII-heavy HTML; 11-35 GB/s on mixed multibyte content
-- `UTF16.validate`  →  ~24-25 GB/s on BMP-heavy text (surrogate-free fast path); ~13 GB/s on dense surrogate-pair content
+- `UTF8.decode` → 2.1–6.7× faster than `String.UTF8.decode` on the HTML payloads
+- `UTF8.encode` → 4.3–9.4× faster than `String.UTF8.encode` on the HTML payloads
+- `UTF8.validate` → up to 55.4 GB/s on ASCII-heavy HTML; 11.9–34.4 GB/s on other HTML payloads
+- `UTF16.validate` → 26.2–26.5 GB/s on the HTML payloads; 13.9 GB/s on dense surrogate pairs
 
-Every operation has a portable **SWAR** (SIMD-within-a-register) path that runs by default and is dispatched to the SIMD kernel only above a size threshold, so small inputs avoid SIMD setup overhead and the library works **with or without `--enable simd`** (the throughput figures above are the SIMD path).
+Every operation has a portable **SWAR** (SIMD-within-a-register) path that runs by default and is dispatched to the SIMD kernel only above a size threshold, so small inputs avoid SIMD setup overhead and the library works **with or without `--enable simd`** (the throughput figures above were measured with SIMD enabled).
 
 If you often pass strings between a UTF-8-based host and wasm, consider using `UTF8.decode`/`UTF8.encode` for much faster conversion and less overhead.
 
@@ -178,62 +178,83 @@ their SWAR/v128 dispatch.
 
 ### Benchmarks
 
-V8 / Apple Silicon, GB/s of UTF-8 input. Payloads are simdutf's `wikipedia_mars/*.html` + `emoji.txt`.
+Apple M4 Max / V8 15.2.20, captured 2026-09-23 from merged main (`b3c5fab`).
+The HTML payloads were downloaded that day, so their contents can differ from
+older captures. Each value is the median of three one-second runs. Throughput
+uses UTF-8 input bytes, except `UTF16.validate`, which uses UTF-16 bytes.
 
-| Payload | `UTF8.decode` | × stdlib | `UTF8.encode` | × stdlib | `UTF8.validate` |
-|---|---:|---:|---:|---:|---:|
-| english.html    | 16.4 GB/s | 6.97× | 14.2 GB/s | 13.0× | **59.6 GB/s** |
-| german.html     | 10.8 GB/s | 4.71× | 12.0 GB/s | 11.3× | 35.3 GB/s |
-| portuguese.html | 9.2 GB/s  | 4.29× | 11.2 GB/s | 11.0× | 30.4 GB/s |
-| french.html     | 7.1 GB/s  | 3.19× | 10.5 GB/s | 10.4× | 24.6 GB/s |
-| turkish.html    | 6.5 GB/s  | 3.05× | 9.4 GB/s  | 10.2× | 21.1 GB/s |
-| vietnamese.html | 5.3 GB/s  | 2.67× | 8.2 GB/s  | 9.5×  | 21.1 GB/s |
-| chinese.html    | 6.2 GB/s  | 2.88× | 10.2 GB/s | 10.2× | 17.5 GB/s |
-| japanese.html   | 5.9 GB/s  | 2.66× | 9.6 GB/s  | 9.4×  | 15.4 GB/s |
-| thai.html       | 6.2 GB/s  | 2.58× | 8.3 GB/s  | 8.4×  | 15.6 GB/s |
-| hindi.html      | 5.8 GB/s  | 2.40× | 9.0 GB/s  | 9.4×  | 16.2 GB/s |
-| arabic.html     | 4.7 GB/s  | 2.55× | 7.1 GB/s  | 8.4×  | 14.3 GB/s |
-| korean.html     | 4.6 GB/s  | 2.15× | 9.1 GB/s  | 9.7×  | 14.1 GB/s |
-| russian.html    | 4.4 GB/s  | 2.45× | 6.6 GB/s  | 8.1×  | 14.0 GB/s |
-| hebrew.html     | 3.9 GB/s  | 2.19× | 6.8 GB/s  | 8.1×  | 11.6 GB/s |
-| emoji.txt       | 1.5 GB/s  | 0.62× | 1.8 GB/s  | 1.7×  | 6.6 GB/s |
+| Payload | `UTF8.decode` | × stdlib | `UTF8.encode` | × stdlib | `UTF8.validate` | `UTF16.validate` |
+|---|---:|---:|---:|---:|---:|---:|
+| english.html    | 17.8 | 6.74× | 11.5 | 9.43× | **55.4** | 26.4 |
+| german.html     | 11.4 | 4.65× | 9.0 | 7.86× | 34.4 | 26.5 |
+| portuguese.html | 9.8 | 4.07× | 7.7 | 7.02× | 30.0 | 26.4 |
+| french.html     | 6.6 | 2.80× | 5.7 | 5.13× | 23.4 | 26.5 |
+| turkish.html    | 6.8 | 2.94× | 6.4 | 6.26× | 21.9 | 26.4 |
+| vietnamese.html | 5.1 | 2.37× | 5.5 | 5.61× | 19.6 | 26.3 |
+| chinese.html    | 6.6 | 2.88× | 6.8 | 6.46× | 17.5 | 26.4 |
+| japanese.html   | 5.8 | 2.62× | 6.2 | 5.65× | 14.7 | 26.5 |
+| thai.html       | 5.9 | 2.52× | 5.7 | 4.86× | 15.7 | 26.4 |
+| hindi.html      | 5.4 | 2.48× | 6.3 | 5.85× | 15.9 | 26.4 |
+| arabic.html     | 4.6 | 2.32× | 4.4 | 4.48× | 13.9 | 26.5 |
+| korean.html     | 4.8 | 2.32× | 5.7 | 5.75× | 14.0 | 26.5 |
+| russian.html    | 4.6 | 2.30× | 4.2 | 4.29× | 14.0 | 26.2 |
+| hebrew.html     | 4.1 | 2.11× | 4.3 | 4.47× | 11.9 | 26.4 |
+| emoji.txt       | 1.6 | 0.64× | 1.0 | 0.92× | 6.7 | 13.9 |
 
-Emoji.txt is the outlier on both sides: 100% supplementary-plane 4-byte sequences force the SIMD path's surrogate-pair branch on every block, defeating the BMP fast lanes. For non-emoji content the wins are consistent across scripts.
+All throughput cells are GB/s. `emoji.txt` is the outlier: its dense
+supplementary-plane sequences make both public conversions slower than the
+stdlib, while validation also falls below the HTML rates.
+
+The optional Wide validators were measured separately on a Ryzen 7 7800X3D
+with Wago and its Wide plugin, using the premerge `13f46c7` tree that was
+merged into `b3c5fab`. Each call validates 4 KiB; times below are per call
+from repeated batches of 100 validations.
+
+| UTF-8 input | SWAR | v128 | Wide 256 | Wide 512 |
+|---|---:|---:|---:|---:|
+| ASCII | 95 ns | 94 ns | 192 ns | 192 ns |
+| Latin | 620 ns | 676 ns | 18.0 µs | 10.6 µs |
+| CJK | 3.34 µs | 673 ns | 18.0 µs | 10.6 µs |
+| Emoji | 2.74 µs | 668 ns | 18.1 µs | 10.7 µs |
+
+The published as-simd transform currently lowers only three v256 operations
+and no v512 operations in this module. Most Wide validation work therefore
+runs in portable Wasm, and v128 is the faster choice for these inputs.
 
 ### Charts
 
-V8 / Apple Silicon, per simdutf payload. Regenerate with `npm run charts`.
+Historical v0.2.0 charts. The table above is the current main-branch capture.
 
 <details>
-<summary><b><code>UTF8.decode</code> vs <code>String.UTF8.decode</code></b> - 2-7× faster across scripts</summary>
+<summary><b><code>UTF8.decode</code> vs <code>String.UTF8.decode</code></b> (v0.2.0)</summary>
 
 ![UTF8.decode vs stdlib](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf-vs-stdlib-decode-v8.png)
 
 </details>
 
 <details>
-<summary><b><code>UTF8.encode</code> vs <code>String.UTF8.encode</code></b> - 8-13× faster across scripts</summary>
+<summary><b><code>UTF8.encode</code> vs <code>String.UTF8.encode</code></b> (v0.2.0)</summary>
 
 ![UTF8.encode vs stdlib](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf-vs-stdlib-encode-v8.png)
 
 </details>
 
 <details>
-<summary><b><code>UTF8.validate</code></b> - up to ~58 GB/s on ASCII-heavy markup, tapering with multibyte density</summary>
+<summary><b><code>UTF8.validate</code></b> (v0.2.0)</summary>
 
 ![UTF8.validate throughput](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf-validate-simdutf-v8.png)
 
 </details>
 
 <details>
-<summary><b><code>UTF16.validate</code></b> - a flat ~24-25 GB/s on BMP text (surrogate-free fast path); <code>emoji.txt</code> is the lone all-surrogate outlier</summary>
+<summary><b><code>UTF16.validate</code></b> (v0.2.0)</summary>
 
 ![UTF16.validate throughput](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf16-validate-simdutf-v8.png)
 
 </details>
 
 <details>
-<summary><b>SWAR vs SIMD <code>UTF8.validate</code></b> - SWAR wins below the 64-byte dispatch threshold; SIMD pulls ahead above it</summary>
+<summary><b>SWAR vs SIMD <code>UTF8.validate</code></b> (v0.2.0)</summary>
 
 ![SWAR vs SIMD validate, ASCII](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf-validate-swar-vs-simd-ascii-v8.png)
 ![SWAR vs SIMD validate, mixed](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf-validate-swar-vs-simd-mixed-v8.png)
@@ -243,7 +264,7 @@ Regenerate with `npm run bench -- utf-validate-swar && npm run charts:build -- u
 </details>
 
 <details>
-<summary><b>SWAR vs SIMD <code>UTF8.decode</code> / <code>UTF8.encode</code></b> - SWAR wins on small/medium input; SIMD pulls ahead above the dispatch thresholds</summary>
+<summary><b>SWAR vs SIMD <code>UTF8.decode</code> / <code>UTF8.encode</code></b> (v0.2.0)</summary>
 
 ![SWAR vs SIMD decode, ASCII](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf-decode-swar-vs-simd-ascii-v8.png)
 ![SWAR vs SIMD encode, ASCII](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf-encode-swar-vs-simd-ascii-v8.png)
@@ -253,7 +274,7 @@ Regenerate with `npm run bench -- utf-transcode-swar && npm run charts:build -- 
 </details>
 
 <details>
-<summary><b>SWAR vs SIMD <code>UTF16.validate</code></b> - SWAR wins below one 8-unit block (16 bytes); the cheap bitmask kernel pulls ahead above it</summary>
+<summary><b>SWAR vs SIMD <code>UTF16.validate</code></b> (v0.2.0)</summary>
 
 ![SWAR vs SIMD UTF-16 validate, BMP](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf16-validate-swar-vs-simd-bmp-v8.png)
 
