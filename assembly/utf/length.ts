@@ -54,6 +54,22 @@ export function utf16_length_from_utf8(src: usize, len: i32): i32 {
     }
   }
 
+  // SIMD-free builds still count eight bytes per word. Continuations have
+  // bit 7 set and bit 6 clear; a zero-byte test finds F0..F7 leads.
+  if (!ASC_FEATURE_SIMD) {
+    while (pos + 8 <= len) {
+      const w = load<u64>(src + <usize>pos);
+      if (w & 0x8080808080808080) {
+        const cont = w & 0x8080808080808080 & ~((w & 0x4040404040404040) << 1);
+        contCount += <i32>popcnt<u64>(cont);
+        const d = (w & 0xF8F8F8F8F8F8F8F8) ^ 0xF0F0F0F0F0F0F0F0;
+        const four = (d - 0x0101010101010101) & ~d & 0x8080808080808080;
+        fourByteCount += <i32>popcnt<u64>(four);
+      }
+      pos += 8;
+    }
+  }
+
   while (pos < len) {
     const b = load<u8>(src + <usize>pos);
     if ((b & 0xC0) == 0x80) contCount += 1;
