@@ -717,6 +717,21 @@ function scalarByteLength(strPtr: usize, strLen: i32, nullTerminated: bool): i32
   let strOff = strPtr;
   const strEnd = strOff + (<usize>strLen << 1);
   let bufLen: i32 = i32(nullTerminated);
+  if (!nullTerminated) {
+    while (strOff + 8 <= strEnd) {
+      const w = load<u64>(strOff);
+      const nonAscii = w & 0xFF80FF80FF80FF80;
+      if (!nonAscii) { bufLen += 4; strOff += 8; continue; }
+      const surrogateDiff = (w & 0xF800F800F800F800) ^ 0xD800D800D800D800;
+      const surrogate = (surrogateDiff - 0x0001000100010001) & ~surrogateDiff & 0x8000800080008000;
+      if (surrogate) break;
+      const ascii = (nonAscii - 0x0001000100010001) & ~nonAscii & 0x8000800080008000;
+      const below800 = w & 0xF800F800F800F800;
+      const shortUnits = (below800 - 0x0001000100010001) & ~below800 & 0x8000800080008000;
+      bufLen += 12 - <i32>popcnt<u64>(ascii) - <i32>popcnt<u64>(shortUnits);
+      strOff += 8;
+    }
+  }
   while (strOff < strEnd) {
     const c1 = <u32>load<u16>(strOff);
     if (c1 < 128) {
