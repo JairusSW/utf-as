@@ -1,8 +1,8 @@
-/** Length counters using fused native Wide classification blocks. */
+/** Length counters built from generic Wide classification blocks. */
 import {
   utf16_length_utf8_block_256, utf16_length_utf8_block_512,
   utf8_length_utf16_block_256, utf8_length_utf16_block_512,
-} from "as-simd/assembly/wide/utf_length";
+} from "./wide_length_block";
 import { validateUtf16Wide256, validateUtf16Wide512 } from "./wide_validate_utf16";
 
 /** UTF-16 units needed for well-formed UTF-8 input. */

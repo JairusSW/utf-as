@@ -153,7 +153,8 @@ utf8_length_from_utf16(src: usize, len: i32): i32   // → UTF-8 bytes from UTF-
 ### Wide kernels
 
 The optional `utf-as/wide` entrypoint exposes 256-bit and 512-bit validators
-and length counters for callers using the `as-simd` Wide transform:
+and length counters. Its block algorithms live in this package and use the
+published `as-simd@0.0.2` generic Wide API:
 
 ```ts
 import {
@@ -166,11 +167,12 @@ import {
 
 Validation lengths are in bytes; `utf8LengthWide*` takes UTF-16 code units and
 returns zero on malformed input. UTF-8 length counting assumes well-formed
-input. Validation uses general vector operations; the Wide Wago plugin can
-lower supported operations without UTF-specific validation imports. Length
-counting uses fused Wide imports when available. Both have portable fallbacks.
-The public `UTF8` and `UTF16`
-namespaces retain their SWAR/v128 dispatch.
+input. Validation and length counting use general vector operations, with
+portable fallbacks. `WAGO_PLUGINS=wide` and `--transform as-simd` let the
+published transform lower supported operations to Wide imports. Current
+compiler output keeps most of these algorithms in portable Wasm, including
+the 512-bit validation path. The public `UTF8` and `UTF16` namespaces retain
+their SWAR/v128 dispatch.
 
 ## Performance
 

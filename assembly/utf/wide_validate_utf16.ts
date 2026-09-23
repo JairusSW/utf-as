@@ -1,5 +1,5 @@
-/** UTF-16LE validation over native 256- and 512-bit Wide blocks. */
-import { utf16_validate_block_256, utf16_validate_block_512 } from "as-simd/assembly/wide/utf16";
+/** UTF-16LE validation over 256- and 512-bit Wide blocks. */
+import { utf16_validate_block_256, utf16_validate_block_512 } from "./wide_utf16_block";
 
 const SCRATCH: usize = memory.data(66);
 

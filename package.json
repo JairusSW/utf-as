@@ -80,6 +80,6 @@
     "assemblyscript": ">=0.27.0"
   },
   "dependencies": {
-    "as-simd": "git+https://github.com/JairusSW/as-simd.git#a70400a38470615aa6ef2c5b1deb0ea8142364df"
+    "as-simd": "0.0.2"
   }
 }
