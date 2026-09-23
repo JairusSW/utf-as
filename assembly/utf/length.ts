@@ -157,6 +157,22 @@ export function utf8_length_from_utf16(src: usize, len: i32): i32 {
     }
   }
 
+  if (!ASC_FEATURE_SIMD) {
+    while (i + 4 <= len) {
+      const w = load<u64>(src + (<usize>i << 1));
+      const nonAscii = w & 0xFF80FF80FF80FF80;
+      if (!nonAscii) { total += 4; i += 4; continue; }
+      const surrogateDiff = (w & 0xF800F800F800F800) ^ 0xD800D800D800D800;
+      const surrogate = (surrogateDiff - 0x0001000100010001) & ~surrogateDiff & 0x8000800080008000;
+      if (surrogate) break;
+      const ascii = (nonAscii - 0x0001000100010001) & ~nonAscii & 0x8000800080008000;
+      const below800 = w & 0xF800F800F800F800;
+      const shortUnits = (below800 - 0x0001000100010001) & ~below800 & 0x8000800080008000;
+      total += 12 - <i32>popcnt<u64>(ascii) - <i32>popcnt<u64>(shortUnits);
+      i += 4;
+    }
+  }
+
   while (i < len) {
     const w: u32 = load<u16>(src + (<usize>i << 1));
     if (w < 0x80) { total += 1; i += 1; }
