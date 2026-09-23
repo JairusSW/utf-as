@@ -167,6 +167,19 @@ describe("SWAR validate / word + ctz boundaries", () => {
   });
 });
 
+describe("SIMD validate / short tail after a full block", () => {
+  test("keeps continuation carry across the block boundary", () => {
+    asciiWith(65, 63, [0xC3, 0xA9]);
+    expect(agree(65)).toBe(true);
+    asciiWith(65, 63, [0xC3, 0x61]);
+    expect(agree(65)).toBe(false);
+    asciiWith(72, 63, [0xF0, 0x9F, 0x98, 0x80]);
+    expect(agree(72)).toBe(true);
+    asciiWith(65, 64, [0xC3]);
+    expect(agree(65)).toBe(false);
+  });
+});
+
 // --- Truncation (especially the <8-byte tail loop) -------------------------
 describe("SWAR validate / truncation rejected", () => {
   test("drop trailing bytes of a multibyte sequence", () => {

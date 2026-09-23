@@ -174,6 +174,18 @@ const CARRY: u8         = TOO_SHORT | TOO_LONG | TWO_CONTS;
   return error;
 }
 
+function tail_is_ascii(buf: usize, pos: i32, len: i32): bool {
+  while (pos + 8 <= len) {
+    if (load<u64>(buf + <usize>pos) & 0x8080808080808080) return false;
+    pos += 8;
+  }
+  while (pos < len) {
+    if (load<u8>(buf + <usize>pos) & 0x80) return false;
+    pos++;
+  }
+  return true;
+}
+
 // SIMD validation driver. Reached only when SIMD is compiled in and the input
 // is large enough to amortize the 64-byte window (see `UTF8.validateUnsafe`'s
 // dispatch). Kept as a non-`@inline` function so the v128 body is never spliced
@@ -212,6 +224,8 @@ const CARRY: u8         = TOO_SHORT | TOO_LONG | TWO_CONTS;
   // valid ASCII, so they neither create nor mask errors.
   if (pos < len) {
     const remaining = len - pos;
+    if (remaining <= 16 && !v128.any_true(prevIncomplete) && tail_is_ascii(buf, pos, len))
+      return !v128.any_true(error);
     memory.fill(SCRATCH, 0, 64);
     memory.copy(SCRATCH, buf + <usize>pos, <usize>remaining);
 
