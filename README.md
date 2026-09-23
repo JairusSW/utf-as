@@ -166,8 +166,10 @@ import {
 
 Validation lengths are in bytes; `utf8LengthWide*` takes UTF-16 code units and
 returns zero on malformed input. UTF-8 length counting assumes well-formed
-input. These helpers use native 256/512-bit instructions with the Wide Wago
-plugin and portable fallbacks otherwise. The public `UTF8` and `UTF16`
+input. Validation uses general vector operations; the Wide Wago plugin can
+lower supported operations without UTF-specific validation imports. Length
+counting uses fused Wide imports when available. Both have portable fallbacks.
+The public `UTF8` and `UTF16`
 namespaces retain their SWAR/v128 dispatch.
 
 ## Performance

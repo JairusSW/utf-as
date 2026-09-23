@@ -10,8 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Optional `utf-as/wide` entrypoint with 256/512-bit UTF-8 and UTF-16
-  validators and length counters. Native Wide instructions are used with the
-  matching `as-simd` transform and Wago plugin; other builds use fallbacks.
+  validators and length counters. Validation uses generic Wide vector
+  operations, while length counting can use fused Wide imports. Other builds
+  use portable fallbacks.
 
 ### Changed
 
