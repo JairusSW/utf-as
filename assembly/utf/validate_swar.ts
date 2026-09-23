@@ -8,10 +8,9 @@
 //   • ASCII fast path — load 8 bytes as a u64 and skip the whole word when no
 //     byte has its high bit set (`w & HI == 0`). On a dirty word, `ctz` jumps
 //     straight to the first non-ASCII byte instead of re-scanning.
-//   • Multibyte — `decodeOne` validates exactly one sequence with the RFC 3629
-//     well-formed ranges (Unicode Table 3-7). Its range checks map 1:1 onto the
-//     SIMD validator's error classes (see `validate.ts:12-20`), so the two paths
-//     accept/reject identically.
+//   • Multibyte — four complete two-byte sequences are checked as one packed
+//     word. Other sequences use `decodeOne` with the RFC 3629 well-formed
+//     ranges (Unicode Table 3-7).
 //
 // No 64-byte scratch fill on short input: empty/short strings cost one u64 load
 // + mask + compare per 8 bytes plus a byte tail — versus the SIMD path's
@@ -91,6 +90,14 @@ const HI: u64 = 0x8080808080808080;
   while (i + 8 <= n) {
     const w = load<u64>(buf + <usize>i);
     if ((w & HI) != 0) {
+      // Four complete C2..DF 80..BF pairs can be checked as one packed word.
+      // The low five lead bits must not be 0 or 1 (the overlong C0/C1 leads).
+      if ((w & 0xC0E0C0E0C0E0C0E0) == 0x80C080C080C080C0) {
+        const leads = w & 0x001E001E001E001E;
+        if (((leads - 0x0001000100010001) & ~leads & 0x0080008000800080) != 0) return false;
+        i += 8;
+        continue;
+      }
       // Dirty word — jump to the first non-ASCII byte, then validate the whole
       // multibyte cluster byte-directly (no per-codepoint word reload) until the
       // text returns to ASCII, where the unrolled skip below takes over again.
@@ -130,7 +137,8 @@ const HI: u64 = 0x8080808080808080;
 
 // --- UTF-16 ----------------------------------------------------------------
 // SWAR UTF-16LE validation: a BMP fast path skips runs of 4 surrogate-free code
-// units per u64 word; surrogate regions fall to a per-unit pairing check. Like
+// units per u64 word; packed surrogate pairs skip two at once, and other
+// surrogate regions fall to a per-unit pairing check. Like
 // the UTF-8 SWAR path, short input pays no `memory.fill`/`memory.copy` scratch.
 
 /** Whether any of the four u16 lanes of `w` is a surrogate (0xD800-0xDFFF).
@@ -173,6 +181,14 @@ const HI: u64 = 0x8080808080808080;
     const w = load<u64>(buf + (<usize>i << 1));
     // BMP fast path: 4 surrogate-free units with no pending low → skip.
     if (!needLow && !wordHasSurrogate(w)) { i += 4; continue; }
+    // Two adjacent pairs fit in one word. Once found, scan the rest of the
+    // pair run without repeating the BMP surrogate test for each word.
+    const pairPattern: u64 = needLow ? 0xD800DC00D800DC00 : 0xDC00D800DC00D800;
+    if ((w & 0xFC00FC00FC00FC00) == pairPattern) {
+      i += 4;
+      while (i + 4 <= units && (load<u64>(buf + (<usize>i << 1)) & 0xFC00FC00FC00FC00) == pairPattern) i += 4;
+      continue;
+    }
     // Surrogate region (or pending low): check the 4 units one at a time.
     for (let k = 0; k < 4; k++) {
       const r = stepUnit(<u32>((w >> (k << 4)) & 0xFFFF), needLow);

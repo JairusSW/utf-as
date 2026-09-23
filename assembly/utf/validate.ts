@@ -174,6 +174,18 @@ const CARRY: u8         = TOO_SHORT | TOO_LONG | TWO_CONTS;
   return error;
 }
 
+function tail_is_ascii(buf: usize, pos: i32, len: i32): bool {
+  while (pos + 8 <= len) {
+    if (load<u64>(buf + <usize>pos) & 0x8080808080808080) return false;
+    pos += 8;
+  }
+  while (pos < len) {
+    if (load<u8>(buf + <usize>pos) & 0x80) return false;
+    pos++;
+  }
+  return true;
+}
+
 // SIMD validation driver. Reached only when SIMD is compiled in and the input
 // is large enough to amortize the 64-byte window (see `UTF8.validateUnsafe`'s
 // dispatch). Kept as a non-`@inline` function so the v128 body is never spliced
@@ -212,6 +224,8 @@ const CARRY: u8         = TOO_SHORT | TOO_LONG | TWO_CONTS;
   // valid ASCII, so they neither create nor mask errors.
   if (pos < len) {
     const remaining = len - pos;
+    if (remaining <= 16 && !v128.any_true(prevIncomplete) && tail_is_ascii(buf, pos, len))
+      return !v128.any_true(error);
     memory.fill(SCRATCH, 0, 64);
     memory.copy(SCRATCH, buf + <usize>pos, <usize>remaining);
 
@@ -271,16 +285,16 @@ const CARRY: u8         = TOO_SHORT | TOO_LONG | TWO_CONTS;
 @inline export function surr_block(v: v128, prevHigh: u32): u32 {
   // surrogate iff (v & 0xf800) == 0xd800.
   const surr = i16x8.eq(v128.and(v, SPLAT_F800_U16), SPLAT_D800_SURR);
-  if (i16x8.bitmask(surr) == 0) {
+  const S = <u32>i16x8.bitmask(surr);
+  if (S == 0) {
     // No surrogates → H = L = 0. Error contribution is the unfulfilled carry
     // (expectedLow == prevHigh, L == 0); carry-out is 0.
     return prevHigh << 1;
   }
   // low iff (v & 0xfc00) == 0xdc00; high is a surrogate that isn't low.
   const low = i16x8.eq(v128.and(v, SPLAT_FC00_U16), SPLAT_DC00_LOW);
-  const high = v128.and(surr, v128.not(low));
-  const H = <u32>i16x8.bitmask(high);
   const L = <u32>i16x8.bitmask(low);
+  const H = S ^ L;
   const err = L ^ (((H << 1) | prevHigh) & 0xff);
   return (err << 1) | ((H >> 7) & 1);
 }
@@ -307,16 +321,28 @@ const CARRY: u8         = TOO_SHORT | TOO_LONG | TWO_CONTS;
   }
 
   if (pos < units) {
-    // Tail: zero-pad the remaining <8 units into scratch. Zeros are
-    // non-surrogates, so they create no spurious pairing — and a real high
-    // surrogate as the last unit demands a low in the (zero) next slot,
-    // correctly flagging an unpaired trailing high.
     const remaining = units - pos;
-    memory.fill(SCRATCH, 0, 16);
-    memory.copy(SCRATCH, buf + (<usize>pos << 1), <usize>remaining << 1);
-    const r = surr_block(v128.load(SCRATCH), prevHigh);
-    errors |= r >> 1;
-    prevHigh = r & 1;
+    if (remaining <= 4) {
+      // A short scalar tail is cheaper than padding and copying a block.
+      while (pos < units) {
+        const cls = load<u16>(buf + (<usize>pos << 1)) & 0xFC00;
+        if (prevHigh) {
+          errors |= u32(cls != 0xDC00);
+          prevHigh = 0;
+        } else if (cls == 0xD800) {
+          prevHigh = 1;
+        } else if (cls == 0xDC00) {
+          errors |= 1;
+        }
+        pos++;
+      }
+    } else {
+      memory.fill(SCRATCH, 0, 16);
+      memory.copy(SCRATCH, buf + (<usize>pos << 1), <usize>remaining << 1);
+      const r = surr_block(v128.load(SCRATCH), prevHigh);
+      errors |= r >> 1;
+      prevHigh = r & 1;
+    }
   }
 
   // A high surrogate at the final block's last unit has no successor.

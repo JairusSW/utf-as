@@ -46,5 +46,5 @@
 // @ts-ignore: decorator
 @inline export function block_is_ascii(b0: v128, b1: v128, b2: v128, b3: v128): bool {
   const any = v128.or(v128.or(b0, b1), v128.or(b2, b3));
-  return !v128.any_true(v128.and(any, MASK_0x80()));
+  return i8x16.bitmask(any) == 0;
 }

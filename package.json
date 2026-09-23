@@ -34,6 +34,7 @@
       "default": "./assembly/index.ts"
     },
     "./utf": "./assembly/utf/index.ts",
+    "./wide": "./assembly/utf/wide.ts",
     "./package.json": "./package.json"
   },
   "files": [
@@ -77,5 +78,8 @@
   },
   "peerDependencies": {
     "assemblyscript": ">=0.27.0"
+  },
+  "dependencies": {
+    "as-simd": "0.0.2"
   }
 }

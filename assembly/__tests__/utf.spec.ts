@@ -933,6 +933,80 @@ describe("UTF8 stdlib parity / encode", () => {
     expect(<u32>load<u8>(p, 3)).toBe(0xBD);
   });
 
+  test("REPLACE and ERROR modes match stdlib across fast-path sizes", () => {
+    let matches = true;
+    for (let count = 1; count <= 96; count++) {
+      let s = "";
+      for (let i = 0; i < count; i++) s += "Aé世🎶";
+      matches = matches
+        && abEq(UTF8.encode(s, false, UTF8.ErrorMode.REPLACE),
+                String.UTF8.encode(s, false, String.UTF8.ErrorMode.REPLACE))
+        && abEq(UTF8.encode(s, false, UTF8.ErrorMode.ERROR),
+                String.UTF8.encode(s, false, String.UTF8.ErrorMode.ERROR));
+    }
+    expect(matches).toBe(true);
+  });
+
+  test("WTF8 dispatch matches stdlib for dense and delayed wide text", () => {
+    let matches = true;
+    const cases = [
+      "Aé世🎶", "🎶", "é", "A", "世",
+      "AAAAAAAAAAAAAAAAAAAA🎶世",
+      "世🎶" + String.fromCharCode(0xD800) + "x"
+    ];
+    for (let k = 0; k < cases.length; k++) {
+      let s = "";
+      for (let i = 0; i < 64; i++) s += cases[k];
+      matches = matches && abEq(UTF8.encode(s), String.UTF8.encode(s));
+    }
+    expect(matches).toBe(true);
+  });
+
+  test("WTF8 surrogate-pair blocks match stdlib at boundaries and scalar tails", () => {
+    let matches = true;
+    const pairs = String.fromCharCode(0xD800) + String.fromCharCode(0xDC00)
+      + String.fromCharCode(0xD83C) + String.fromCharCode(0xDFB6)
+      + String.fromCharCode(0xDBFF) + String.fromCharCode(0xDFFF)
+      + String.fromCharCode(0xD900) + String.fromCharCode(0xDE00);
+    for (let count = 1; count <= 16; count++) {
+      let prefix = "";
+      for (let i = 0; i < count; i++) prefix += pairs;
+      const cases = [
+        prefix,
+        prefix + "Aé世",
+        prefix + String.fromCharCode(0xD800) + "x",
+        prefix + String.fromCharCode(0xDC00)
+      ];
+      for (let k = 0; k < cases.length; k++) {
+        matches = matches && abEq(UTF8.encode(cases[k]), String.UTF8.encode(cases[k]));
+        matches = matches && abEq(
+          UTF8.encode(cases[k], false, UTF8.ErrorMode.REPLACE),
+          String.UTF8.encode(cases[k], false, String.UTF8.ErrorMode.REPLACE)
+        );
+      }
+      matches = matches && abEq(
+        UTF8.encode(prefix, false, UTF8.ErrorMode.ERROR),
+        String.UTF8.encode(prefix, false, String.UTF8.ErrorMode.ERROR)
+      );
+    }
+    expect(matches).toBe(true);
+  });
+
+  test("REPLACE mode matches stdlib with lone surrogates after long prefixes", () => {
+    let matches = true;
+    for (let count = 1; count <= 40; count++) {
+      let prefix = "";
+      for (let i = 0; i < count; i++) prefix += "Aé世🎶";
+      const s = prefix + String.fromCharCode(0xD800) + "x"
+        + String.fromCharCode(0xDC00) + prefix;
+      const ours = UTF8.encode(s, false, UTF8.ErrorMode.REPLACE);
+      const ref = String.UTF8.encode(s, false, String.UTF8.ErrorMode.REPLACE);
+      matches = matches && UTF8.byteLength(s) == ref.byteLength
+        && abEq(ours, ref);
+    }
+    expect(matches).toBe(true);
+  });
+
   test("ERROR mode on valid string matches stdlib (no throw)", () => {
     const s = "Hello, 世界!";
     const ours = UTF8.encode(s, false, UTF8.ErrorMode.ERROR);

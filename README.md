@@ -13,6 +13,7 @@
   - [`UTF16`](#utf16)
   - [Validation](#validation)
   - [Length pre-counters](#length-pre-counters)
+  - [Wide kernels](#wide-kernels)
 - [Performance](#performance)
   - [Benchmarks](#benchmarks)
   - [Running benchmarks locally](#running-benchmarks-locally)
@@ -82,7 +83,7 @@ All namespace functions match their Standard Library `String.UTF8` / `String.UTF
 
 ### `UTF8`
 
-Drop-in for `String.UTF8`. `encode` / `decode` run a **SWAR** transcoder (8 code units / bytes per `u64`, with a scalar coder for multibyte) by default and dispatch to the SIMD kernel only when SIMD is compiled in (`ASC_FEATURE_SIMD`) and the input clears a size threshold (encode 32 units, decode 256 bytes) — below that the SIMD kernels do no vector work, so SWAR is faster (up to ~3× on small ASCII). The scalar fallback (a byte-for-byte stdlib clone) covers `nullTerminated`, `REPLACE`, and `ERROR` modes. Like validation, `encode` / `decode` compile and run with `--enable simd` off.
+Drop-in for `String.UTF8`. `encode` / `decode` use a **SWAR** transcoder by default. With SIMD enabled, encoding switches to v128 at 16 UTF-16 units; decoding switches at 512 bytes, or at 256 bytes for pure ASCII. A short leading sample routes dense mixed CJK text to the scalar encoder; runs of surrogate pairs use a dedicated SIMD encoder. ASCII input also uses the fast encoder in `REPLACE` and `ERROR` modes; mixed text, lone surrogates, and `nullTerminated` use the scalar fallback in those modes. Both functions compile and run without SIMD.
 
 ```ts
 UTF8.byteLength(str: string, nullTerminated?: bool): i32
@@ -148,6 +149,30 @@ Output-size pre-computation for sizing destination buffers without performing th
 utf16_length_from_utf8(src: usize, len: i32): i32   // → UTF-16 units from UTF-8 bytes
 utf8_length_from_utf16(src: usize, len: i32): i32   // → UTF-8 bytes from UTF-16 units (0 on lone surrogate)
 ```
+
+### Wide kernels
+
+The optional `utf-as/wide` entrypoint exposes 256-bit and 512-bit validators
+and length counters. Its block algorithms live in this package and use the
+published `as-simd@0.0.2` generic Wide API:
+
+```ts
+import {
+  validateWide256, validateWide512,
+  validateUtf16Wide256, validateUtf16Wide512,
+  utf16LengthWide256, utf16LengthWide512,
+  utf8LengthWide256, utf8LengthWide512,
+} from "utf-as/wide";
+```
+
+Validation lengths are in bytes; `utf8LengthWide*` takes UTF-16 code units and
+returns zero on malformed input. UTF-8 length counting assumes well-formed
+input. Validation and length counting use general vector operations, with
+portable fallbacks. `WAGO_PLUGINS=wide` and `--transform as-simd` let the
+published transform lower supported operations to Wide imports. Current
+compiler output keeps most of these algorithms in portable Wasm, including
+the 512-bit validation path. The public `UTF8` and `UTF16` namespaces retain
+their SWAR/v128 dispatch.
 
 ## Performance
 

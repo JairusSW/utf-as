@@ -5,6 +5,38 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Optional `utf-as/wide` entrypoint with 256/512-bit UTF-8 and UTF-16
+  validators and length counters. The block algorithms live in this package
+  and use the published `as-simd` generic Wide API. Builds without Wide imports
+  use portable fallbacks.
+
+### Changed
+
+- Faster SWAR length counting and UTF-8 transcoding, plus shorter v128
+  validation and conversion tails. Pure ASCII decode now selects v128 from
+  256 bytes, and ASCII encode selects v128 from 16 UTF-16 units.
+- `UTF8.encode` uses the SWAR/SIMD transcoder for ASCII input in `REPLACE` and
+  `ERROR` modes. Mixed text and lone surrogates use the scalar emitter to
+  preserve throughput and each mode's behavior.
+- Default WTF8 encoding now routes dense mixed CJK text to the scalar emitter
+  after a short leading sample. ASCII and Latin text keep the existing
+  SWAR/SIMD route.
+- Emoji runs now use a dedicated SIMD encoder that converts four surrogate
+  pairs per block, then hands any mixed or malformed tail to the scalar
+  emitter. This path also serves `REPLACE` and `ERROR` modes.
+- The SIMD UTF-8 length counter uses one bit per UTF-16 unit and one population
+  count per surrogate pair, reducing its work on emoji input.
+
+### Fixed
+
+- The SIMD UTF-8 length counter now checks surrogate adjacency, not just equal
+  high/low counts. A valid pair plus separate lone surrogates could otherwise
+  undercount the output buffer.
+
 ## [0.3.1] - 2026-06-24
 
 ### Fixed
