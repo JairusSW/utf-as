@@ -230,7 +230,26 @@ runs in portable Wasm, and v128 is the faster choice for these inputs.
 
 ### Charts
 
-Historical v0.2.0 charts. The table above is the current main-branch capture.
+Current charts use the same three-run medians as the tables above. Source
+snapshots are in [`bench/results`](./bench/results); regenerate the SVG and PNG
+files with `npm run charts:release`.
+
+![UTF-8 decode throughput against AssemblyScript stdlib](./docs/charts/2026-09-23/utf8-decode.svg)
+
+![UTF-8 encode throughput against AssemblyScript stdlib](./docs/charts/2026-09-23/utf8-encode.svg)
+
+![UTF-8 and UTF-16 validation throughput](./docs/charts/2026-09-23/validation.svg)
+
+The Wide charts use a logarithmic time axis to keep all four implementations
+visible. Lower bars are faster; the 256-bit and 512-bit paths remain slower on
+these inputs with the current transform.
+
+![UTF-8 validation latency on AMD64 with Wide plugin](./docs/charts/2026-09-23/wide-utf8.svg)
+
+![UTF-16 validation latency on AMD64 with Wide plugin](./docs/charts/2026-09-23/wide-utf16.svg)
+
+<details>
+<summary>Historical v0.2.0 charts</summary>
 
 <details>
 <summary><b><code>UTF8.decode</code> vs <code>String.UTF8.decode</code></b> (v0.2.0)</summary>
@@ -286,6 +305,8 @@ Regenerate with `npm run bench -- utf-transcode-swar && npm run charts:build -- 
 ![SWAR vs SIMD UTF-16 validate, BMP](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf16-validate-swar-vs-simd-bmp-v8.png)
 
 Regenerate with `npm run bench -- utf16-validate-swar && npm run charts:build -- utf16-validate-swar-vs-simd`.
+
+</details>
 
 </details>
 

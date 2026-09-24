@@ -60,6 +60,7 @@
     "bench:summary": "node ./scripts/bench-summary.mjs",
     "charts": "npm run charts:build && npm run charts:serve",
     "charts:build": "bash ./scripts/build-charts.sh",
+    "charts:release": "node ./scripts/build-release-charts.mjs",
     "charts:list": "bash ./scripts/build-charts.sh --list",
     "charts:publish": "bash ./scripts/publish-benchmarks.sh",
     "charts:serve": "npx --yes serve@latest ./charts",
