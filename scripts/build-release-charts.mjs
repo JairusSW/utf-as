@@ -6,9 +6,12 @@ import { fileURLToPath } from "node:url";
 import { ChartJSNodeCanvas } from "chartjs-node-canvas";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const capture = JSON.parse(fs.readFileSync(path.join(root, "bench/results/2026-09-23-v8-main.json")));
-const wide = JSON.parse(fs.readFileSync(path.join(root, "bench/results/2026-09-23-wide-amd64.json")));
-const out = path.join(root, "docs/charts/2026-09-23");
+const captures = ["arm64", "amd64"].map((arch) => ({
+  arch,
+  v8: JSON.parse(fs.readFileSync(path.join(root, `bench/results/2026-09-24-${arch}.json`))),
+  wide: JSON.parse(fs.readFileSync(path.join(root, `bench/results/2026-09-24-wide-${arch}.json`))),
+}));
+const out = path.join(root, "docs/charts/2026-09-24");
 fs.mkdirSync(out, { recursive: true });
 
 // The shared json-as colors keep related AssemblyScript projects visually consistent.
@@ -19,8 +22,6 @@ const colors = {
 };
 const ink = "#263449";
 const grid = "#E6EBF0";
-const labels = capture.rows.map((r) => r.payload.replace(/\.(html|txt)$/, ""));
-
 function base(title, subtitle, horizontal = true) {
   return {
     responsive: false,
@@ -44,7 +45,7 @@ function dataset(label, data, color) {
   return { label, data, backgroundColor: color, borderRadius: 3, barPercentage: 0.83, categoryPercentage: 0.76 };
 }
 
-function conversion(direction) {
+function conversion(capture, direction) {
   const options = base(
     `UTF-8 ${direction} throughput`,
     `${capture.host}  ·  ${capture.runtime}  ·  ${capture.date}  ·  three-run median  ·  higher is better`,
@@ -52,7 +53,7 @@ function conversion(direction) {
   options.scales.x.title = { display: true, text: "GB/s of UTF-8 input", color: ink, font: { size: 13, weight: "bold" } };
   return {
     type: "bar",
-    data: { labels, datasets: [
+    data: { labels: capture.rows.map((r) => r.payload.replace(/\.(html|txt)$/, "")), datasets: [
       dataset(`String.UTF8.${direction}`, capture.rows.map((r) => r[direction].stdlib), colors.stdlib),
       dataset(`utf-as UTF8.${direction}`, capture.rows.map((r) => r[direction].utfAs), colors.utfAs),
     ] },
@@ -60,7 +61,7 @@ function conversion(direction) {
   };
 }
 
-function validation() {
+function validation(capture) {
   const options = base(
     "Unicode validation throughput",
     `${capture.host}  ·  ${capture.runtime}  ·  ${capture.date}  ·  three-run median  ·  higher is better`,
@@ -68,7 +69,7 @@ function validation() {
   options.scales.x.title = { display: true, text: "GB/s of input bytes", color: ink, font: { size: 13, weight: "bold" } };
   return {
     type: "bar",
-    data: { labels, datasets: [
+    data: { labels: capture.rows.map((r) => r.payload.replace(/\.(html|txt)$/, "")), datasets: [
       dataset("UTF8.validate · UTF-8 bytes", capture.rows.map((r) => r.validateUtf8), colors.utf8),
       dataset("UTF16.validate · UTF-16 bytes", capture.rows.map((r) => r.validateUtf16), colors.utf16),
     ] },
@@ -76,7 +77,7 @@ function validation() {
   };
 }
 
-function wideValidation(encoding) {
+function wideValidation(wide, encoding) {
   const options = base(
     `${encoding.toUpperCase()} validation latency · 4 KiB`,
     `${wide.host}  ·  ${wide.runtime}  ·  three-run median  ·  lower is better`,
@@ -97,13 +98,13 @@ function wideValidation(encoding) {
   };
 }
 
-const charts = [
-  ["utf8-decode", conversion("decode"), 1280, 830],
-  ["utf8-encode", conversion("encode"), 1280, 830],
-  ["validation", validation(), 1280, 830],
-  ["wide-utf8", wideValidation("utf8"), 1100, 620],
-  ["wide-utf16", wideValidation("utf16"), 1100, 620],
-];
+const charts = captures.flatMap(({ arch, v8, wide }) => [
+  [`utf8-decode-${arch}`, conversion(v8, "decode"), 1280, 830],
+  [`utf8-encode-${arch}`, conversion(v8, "encode"), 1280, 830],
+  [`validation-${arch}`, validation(v8), 1280, 830],
+  [`wide-utf8-${arch}`, wideValidation(wide, "utf8"), 1100, 620],
+  [`wide-utf16-${arch}`, wideValidation(wide, "utf16"), 1100, 620],
+]);
 for (const [name, config, width, height] of charts) {
   for (const type of ["svg", "png"]) {
     const canvas = new ChartJSNodeCanvas({ width, height, type, backgroundColour: "white" });
