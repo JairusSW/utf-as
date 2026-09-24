@@ -23,7 +23,10 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Run tests
         run: npm test
+
+      - name: Test packed consumer
+        run: npm run test:package
