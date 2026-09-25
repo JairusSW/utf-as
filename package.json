@@ -1,6 +1,6 @@
 {
   "name": "utf-as",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "SIMD UTF-8/UTF-16 for AssemblyScript — a drop-in for String.UTF8 / String.UTF16 with simdutf-derived 128-bit Wasm SIMD kernels.",
   "type": "module",
   "author": "Jairus Tanaka <me@jairus.dev> (https://jairus.dev/)",
@@ -33,12 +33,14 @@
       "types": "./assembly/index.ts",
       "default": "./assembly/index.ts"
     },
-    "./utf": "./assembly/utf/index.ts",
-    "./wide": "./assembly/utf/wide.ts",
+    "./utf": "./utf.ts",
+    "./wide": "./wide.ts",
     "./package.json": "./package.json"
   },
   "files": [
     "index.ts",
+    "utf.ts",
+    "wide.ts",
     "assembly/index.ts",
     "assembly/utf/**/*.ts",
     "asconfig.json",
@@ -48,6 +50,7 @@
   ],
   "scripts": {
     "test": "ast test",
+    "test:package": "node ./scripts/test-package.mjs",
     "play": "asc ./assembly/test.ts -o ./build/test.wasm && wasmtime ./build/test.wasm",
     "bench": "bash ./scripts/run-bench.sh",
     "bench:fetch": "bash ./scripts/fetch-simdutf-payloads.sh",
@@ -57,6 +60,7 @@
     "bench:summary": "node ./scripts/bench-summary.mjs",
     "charts": "npm run charts:build && npm run charts:serve",
     "charts:build": "bash ./scripts/build-charts.sh",
+    "charts:release": "node ./scripts/build-release-charts.mjs",
     "charts:list": "bash ./scripts/build-charts.sh --list",
     "charts:publish": "bash ./scripts/publish-benchmarks.sh",
     "charts:serve": "npx --yes serve@latest ./charts",
@@ -64,7 +68,7 @@
     "report:vs-stdlib": "npm run bench:vs-stdlib && npm run bench:simdutf && npm run charts:build",
     "clean": "rm -rf build charts .as-test",
     "clean:bench": "rm -rf build/logs charts",
-    "prepublishOnly": "npm test"
+    "prepublishOnly": "npm test && npm run test:package"
   },
   "devDependencies": {
     "@assemblyscript/wasi-shim": "^0.1.0",
@@ -77,7 +81,7 @@
     "chartjs-plugin-datalabels": "^2.2.0"
   },
   "peerDependencies": {
-    "assemblyscript": ">=0.27.0"
+    "assemblyscript": ">=0.28.19"
   },
   "dependencies": {
     "as-simd": "0.0.2"

@@ -178,116 +178,139 @@ their SWAR/v128 dispatch.
 
 ### Benchmarks
 
-Apple M4 Max / V8 15.2.20, captured 2026-09-23 from merged main (`b3c5fab`).
-The HTML payloads were downloaded that day, so their contents can differ from
-older captures. Each value is the median of three one-second runs. Throughput
-uses UTF-8 input bytes, except `UTF16.validate`, which uses UTF-16 bytes.
+These are fresh 2026-09-24 captures of main at `ca0cd0b`. Both machines used
+identical simdutf payload bytes. Each V8 value is the median of three one-second
+runs. Throughput uses UTF-8 input bytes, except `UTF16.validate`, which uses
+UTF-16 bytes. Results from different hosts and V8 versions are shown separately.
+
+#### Apple M4 Max / arm64 / V8 15.2.20
 
 | Payload | `UTF8.decode` | × stdlib | `UTF8.encode` | × stdlib | `UTF8.validate` | `UTF16.validate` |
 |---|---:|---:|---:|---:|---:|---:|
-| english.html    | 17.8 | 6.74× | 11.5 | 9.43× | **55.4** | 26.4 |
-| german.html     | 11.4 | 4.65× | 9.0 | 7.86× | 34.4 | 26.5 |
-| portuguese.html | 9.8 | 4.07× | 7.7 | 7.02× | 30.0 | 26.4 |
-| french.html     | 6.6 | 2.80× | 5.7 | 5.13× | 23.4 | 26.5 |
-| turkish.html    | 6.8 | 2.94× | 6.4 | 6.26× | 21.9 | 26.4 |
-| vietnamese.html | 5.1 | 2.37× | 5.5 | 5.61× | 19.6 | 26.3 |
-| chinese.html    | 6.6 | 2.88× | 6.8 | 6.46× | 17.5 | 26.4 |
-| japanese.html   | 5.8 | 2.62× | 6.2 | 5.65× | 14.7 | 26.5 |
-| thai.html       | 5.9 | 2.52× | 5.7 | 4.86× | 15.7 | 26.4 |
-| hindi.html      | 5.4 | 2.48× | 6.3 | 5.85× | 15.9 | 26.4 |
-| arabic.html     | 4.6 | 2.32× | 4.4 | 4.48× | 13.9 | 26.5 |
-| korean.html     | 4.8 | 2.32× | 5.7 | 5.75× | 14.0 | 26.5 |
-| russian.html    | 4.6 | 2.30× | 4.2 | 4.29× | 14.0 | 26.2 |
-| hebrew.html     | 4.1 | 2.11× | 4.3 | 4.47× | 11.9 | 26.4 |
-| emoji.txt       | 1.6 | 0.64× | 1.0 | 0.92× | 6.7 | 13.9 |
+| english.html | 17.8 | 6.76× | 11.5 | 9.78× | 55.5 | 26.3 |
+| german.html | 11.4 | 4.54× | 9.0 | 8.00× | 34.2 | 26.5 |
+| portuguese.html | 9.8 | 4.02× | 7.9 | 7.07× | 30.1 | 26.5 |
+| french.html | 6.9 | 2.82× | 5.9 | 5.53× | 23.6 | 26.3 |
+| turkish.html | 7.0 | 3.06× | 6.4 | 6.17× | 21.9 | 25.9 |
+| vietnamese.html | 5.1 | 2.33× | 5.4 | 5.72× | 19.7 | 26.1 |
+| chinese.html | 6.6 | 2.88× | 6.8 | 6.45× | 17.7 | 26.6 |
+| japanese.html | 5.8 | 2.60× | 6.2 | 5.73× | 14.7 | 26.0 |
+| thai.html | 6.0 | 2.56× | 5.7 | 4.92× | 15.8 | 26.7 |
+| hindi.html | 5.5 | 2.55× | 6.4 | 5.77× | 15.9 | 26.4 |
+| arabic.html | 4.6 | 2.27× | 4.3 | 4.52× | 13.7 | 26.5 |
+| korean.html | 4.8 | 2.22× | 5.6 | 5.58× | 14.2 | 26.4 |
+| russian.html | 4.5 | 2.31× | 4.2 | 4.25× | 14.5 | 26.6 |
+| hebrew.html | 4.1 | 2.12× | 4.3 | 4.57× | 11.8 | 26.6 |
+| emoji.txt | 1.6 | 0.63× | 1.0 | 0.93× | 6.7 | 13.9 |
 
-All throughput cells are GB/s. `emoji.txt` is the outlier: its dense
-supplementary-plane sequences make both public conversions slower than the
-stdlib, while validation also falls below the HTML rates.
+All throughput cells are GB/s.
 
-The optional Wide validators were measured separately on a Ryzen 7 7800X3D
-with Wago and its Wide plugin, using main at `ea63681`. Each call validates
-4 KiB; times below are per call, calculated from three runs of repeated
-batches of 100 validations.
+#### AMD Ryzen 7 7800X3D / amd64 / V8 15.5.4
 
-| UTF-8 input | SWAR | v128 | Wide 256 | Wide 512 |
+| Payload | `UTF8.decode` | × stdlib | `UTF8.encode` | × stdlib | `UTF8.validate` | `UTF16.validate` |
+|---|---:|---:|---:|---:|---:|---:|
+| english.html | 15.4 | 7.18× | 7.6 | 8.32× | 53.7 | 16.8 |
+| german.html | 10.7 | 5.13× | 6.3 | 6.91× | 28.9 | 16.8 |
+| portuguese.html | 9.6 | 4.69× | 5.3 | 5.79× | 24.9 | 16.8 |
+| french.html | 4.7 | 2.36× | 3.1 | 3.54× | 19.4 | 16.8 |
+| turkish.html | 7.2 | 3.77× | 4.7 | 5.53× | 16.5 | 16.9 |
+| vietnamese.html | 3.6 | 2.07× | 3.4 | 4.71× | 14.1 | 16.9 |
+| chinese.html | 6.6 | 3.44× | 4.9 | 5.50× | 12.7 | 16.8 |
+| japanese.html | 5.9 | 3.07× | 4.5 | 5.40× | 10.1 | 16.8 |
+| thai.html | 4.0 | 2.02× | 3.3 | 3.42× | 10.6 | 16.9 |
+| hindi.html | 6.2 | 3.43× | 4.8 | 5.66× | 10.7 | 16.7 |
+| arabic.html | 4.1 | 2.44× | 2.7 | 3.61× | 9.3 | 16.7 |
+| korean.html | 5.2 | 2.70× | 4.3 | 5.08× | 9.9 | 16.7 |
+| russian.html | 3.5 | 2.03× | 2.5 | 3.25× | 9.8 | 16.9 |
+| hebrew.html | 4.8 | 2.87× | 3.4 | 4.96× | 7.9 | 16.8 |
+| emoji.txt | 1.6 | 0.73× | 0.8 | 0.86× | 4.0 | 11.2 |
+
+All throughput cells are GB/s.
+
+`emoji.txt` is the conversion outlier on both machines: its dense
+supplementary-plane sequences make `UTF8.encode` and `UTF8.decode` slower than
+the standard library.
+
+The optional Wide validators were measured with the same freshly compiled Wasm
+module on both hosts through the same Wago Go API and Wide plugin source. Each
+call validates 4 KiB. Values are microseconds per call, calculated from the
+median of three benchmark samples with 100 validations per operation. Lower is
+better.
+
+#### Wide validation / Apple M4 Max / arm64
+
+**UTF8**, µs per 4 KiB call:
+
+| Input | SWAR | v128 | Wide 256 | Wide 512 |
 |---|---:|---:|---:|---:|
-| ASCII | 94 ns | 94 ns | 193 ns | 192 ns |
-| Latin | 622 ns | 671 ns | 18.1 µs | 10.5 µs |
-| CJK | 3.34 µs | 672 ns | 18.0 µs | 10.5 µs |
-| Emoji | 2.74 µs | 668 ns | 18.1 µs | 10.5 µs |
+| ASCII | 0.087 | 0.094 | 0.229 | 0.208 |
+| Latin | 0.587 | 0.630 | 8.801 | 7.894 |
+| CJK | 3.352 | 0.640 | 8.656 | 7.945 |
+| Emoji | 2.658 | 0.641 | 8.701 | 7.847 |
 
-| UTF-16 input | SWAR | v128 | Wide 256 | Wide 512 |
+**UTF16**, µs per 4 KiB call:
+
+| Input | SWAR | v128 | Wide 256 | Wide 512 |
 |---|---:|---:|---:|---:|
-| ASCII | 785 ns | 300 ns | 2.83 µs | 2.12 µs |
-| Latin | 787 ns | 298 ns | 2.84 µs | 2.11 µs |
-| CJK | 786 ns | 298 ns | 2.84 µs | 2.11 µs |
-| Emoji | 471 ns | 501 ns | 2.84 µs | 2.11 µs |
+| ASCII | 0.516 | 0.319 | 1.465 | 1.363 |
+| Latin | 0.529 | 0.318 | 1.475 | 1.390 |
+| CJK | 0.529 | 0.314 | 1.483 | 1.388 |
+| Emoji | 0.270 | 0.540 | 1.488 | 1.371 |
 
-The published as-simd transform currently lowers only three v256 operations
-and no v512 operations in this module. Most Wide validation work therefore
-runs in portable Wasm, and v128 is the faster choice for these inputs.
+#### Wide validation / AMD Ryzen 7 7800X3D / amd64
+
+**UTF8**, µs per 4 KiB call:
+
+| Input | SWAR | v128 | Wide 256 | Wide 512 |
+|---|---:|---:|---:|---:|
+| ASCII | 0.090 | 0.090 | 0.186 | 0.185 |
+| Latin | 0.605 | 0.633 | 17.618 | 10.676 |
+| CJK | 3.260 | 0.636 | 17.709 | 10.681 |
+| Emoji | 2.706 | 0.642 | 17.688 | 10.716 |
+
+**UTF16**, µs per 4 KiB call:
+
+| Input | SWAR | v128 | Wide 256 | Wide 512 |
+|---|---:|---:|---:|---:|
+| ASCII | 0.760 | 0.289 | 2.786 | 2.083 |
+| Latin | 0.757 | 0.289 | 2.773 | 2.081 |
+| CJK | 0.757 | 0.288 | 2.784 | 2.086 |
+| Emoji | 0.460 | 0.490 | 2.792 | 2.073 |
+
+The published `as-simd` transform lowers only three v256 operations and no
+v512 operations in this module. Most Wide validation work therefore runs in
+portable Wasm; v128 remains faster on these inputs.
 
 ### Charts
 
-Historical v0.2.0 charts. The table above is the current main-branch capture.
+The SVG and PNG charts use the checked-in snapshots under
+[`bench/results`](./bench/results). Regenerate them with
+`npm run charts:release`. The Wide charts use a logarithmic time axis to keep
+all four implementations visible.
 
-<details>
-<summary><b><code>UTF8.decode</code> vs <code>String.UTF8.decode</code></b> (v0.2.0)</summary>
+#### Apple M4 Max (arm64)
 
-![UTF8.decode vs stdlib](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf-vs-stdlib-decode-v8.png)
+![UTF-8 decode throughput on arm64](./docs/charts/2026-09-24/utf8-decode-arm64.svg)
 
-</details>
+![UTF-8 encode throughput on arm64](./docs/charts/2026-09-24/utf8-encode-arm64.svg)
 
-<details>
-<summary><b><code>UTF8.encode</code> vs <code>String.UTF8.encode</code></b> (v0.2.0)</summary>
+![Unicode validation throughput on arm64](./docs/charts/2026-09-24/validation-arm64.svg)
 
-![UTF8.encode vs stdlib](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf-vs-stdlib-encode-v8.png)
+![UTF-8 Wide validation latency on arm64](./docs/charts/2026-09-24/wide-utf8-arm64.svg)
 
-</details>
+![UTF-16 Wide validation latency on arm64](./docs/charts/2026-09-24/wide-utf16-arm64.svg)
 
-<details>
-<summary><b><code>UTF8.validate</code></b> (v0.2.0)</summary>
+#### AMD Ryzen 7 7800X3D (amd64)
 
-![UTF8.validate throughput](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf-validate-simdutf-v8.png)
+![UTF-8 decode throughput on amd64](./docs/charts/2026-09-24/utf8-decode-amd64.svg)
 
-</details>
+![UTF-8 encode throughput on amd64](./docs/charts/2026-09-24/utf8-encode-amd64.svg)
 
-<details>
-<summary><b><code>UTF16.validate</code></b> (v0.2.0)</summary>
+![Unicode validation throughput on amd64](./docs/charts/2026-09-24/validation-amd64.svg)
 
-![UTF16.validate throughput](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf16-validate-simdutf-v8.png)
+![UTF-8 Wide validation latency on amd64](./docs/charts/2026-09-24/wide-utf8-amd64.svg)
 
-</details>
-
-<details>
-<summary><b>SWAR vs SIMD <code>UTF8.validate</code></b> (v0.2.0)</summary>
-
-![SWAR vs SIMD validate, ASCII](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf-validate-swar-vs-simd-ascii-v8.png)
-![SWAR vs SIMD validate, mixed](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf-validate-swar-vs-simd-mixed-v8.png)
-
-Regenerate with `npm run bench -- utf-validate-swar && npm run charts:build -- utf-validate-swar-vs-simd`.
-
-</details>
-
-<details>
-<summary><b>SWAR vs SIMD <code>UTF8.decode</code> / <code>UTF8.encode</code></b> (v0.2.0)</summary>
-
-![SWAR vs SIMD decode, ASCII](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf-decode-swar-vs-simd-ascii-v8.png)
-![SWAR vs SIMD encode, ASCII](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf-encode-swar-vs-simd-ascii-v8.png)
-
-Regenerate with `npm run bench -- utf-transcode-swar && npm run charts:build -- utf-transcode-swar-vs-simd`.
-
-</details>
-
-<details>
-<summary><b>SWAR vs SIMD <code>UTF16.validate</code></b> (v0.2.0)</summary>
-
-![SWAR vs SIMD UTF-16 validate, BMP](https://raw.githubusercontent.com/JairusSW/utf-as/refs/heads/docs/charts/v0.2.0/utf16-validate-swar-vs-simd-bmp-v8.png)
-
-Regenerate with `npm run bench -- utf16-validate-swar && npm run charts:build -- utf16-validate-swar-vs-simd`.
-
-</details>
+![UTF-16 Wide validation latency on amd64](./docs/charts/2026-09-24/wide-utf16-amd64.svg)
 
 ### Running benchmarks locally
 

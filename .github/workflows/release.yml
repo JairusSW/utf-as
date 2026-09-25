@@ -23,10 +23,13 @@ jobs:
           cache: npm
 
       - name: Install Dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Run Tests
         run: npm test
+
+      - name: Test packed consumer
+        run: npm run test:package
 
   # Create GitHub Release
   release:

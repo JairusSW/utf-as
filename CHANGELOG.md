@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-24
+
 ### Added
 
 - Optional `utf-as/wide` entrypoint with 256/512-bit UTF-8 and UTF-16
@@ -16,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Require AssemblyScript 0.28.19 or newer; 0.27.0 emits invalid Wasm for a
+  v128 lane store used by the current decoder.
 - Faster SWAR length counting and UTF-8 transcoding, plus shorter v128
   validation and conversion tails. Pure ASCII decode now selects v128 from
   256 bytes, and ASCII encode selects v128 from 16 UTF-16 units.
@@ -33,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Include top-level `utf.ts` and `wide.ts` entrypoints in the package so
+  AssemblyScript consumers can compile the advertised subpath imports.
 - The SIMD UTF-8 length counter now checks surrogate adjacency, not just equal
   high/low counts. A valid pair plus separate lone surrogates could otherwise
   undercount the output buffer.
@@ -173,7 +179,10 @@ On simdutf's `wikipedia_mars/*.html` + `emoji.txt` fixtures (V8 / Apple Silicon)
 - `UTF16.validate` — ~24–25 GB/s on BMP-heavy text via the surrogate-free fast
   path; ~13 GB/s on dense surrogate-pair content.
 
-[Unreleased]: https://github.com/JairusSW/utf-as/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/JairusSW/utf-as/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/JairusSW/utf-as/compare/v0.3.1...v0.4.0
+[0.3.1]: https://github.com/JairusSW/utf-as/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/JairusSW/utf-as/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/JairusSW/utf-as/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/JairusSW/utf-as/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/JairusSW/utf-as/releases/tag/v0.1.0

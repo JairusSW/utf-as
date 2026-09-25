@@ -1,0 +1,206 @@
+{
+  "host": "AMD Ryzen 7 7800X3D",
+  "architecture": "amd64",
+  "runtime": "V8 15.5.4",
+  "date": "2026-09-24",
+  "commit": "ca0cd0b",
+  "fixtureManifestSha256": "239dc68f3ac7fbcd9c492ee59ae86fad3cc4cf3a60f44000891495361801cf75",
+  "method": "Median of three one-second runs; GB/s uses UTF-8 input bytes except UTF-16 validation, which uses UTF-16 bytes.",
+  "rows": [
+    {
+      "payload": "english.html",
+      "decode": {
+        "stdlib": 2.145,
+        "utfAs": 15.396
+      },
+      "encode": {
+        "stdlib": 0.911,
+        "utfAs": 7.575
+      },
+      "validateUtf8": 53.692,
+      "validateUtf16": 16.774
+    },
+    {
+      "payload": "german.html",
+      "decode": {
+        "stdlib": 2.085,
+        "utfAs": 10.693
+      },
+      "encode": {
+        "stdlib": 0.918,
+        "utfAs": 6.344
+      },
+      "validateUtf8": 28.872,
+      "validateUtf16": 16.792
+    },
+    {
+      "payload": "portuguese.html",
+      "decode": {
+        "stdlib": 2.055,
+        "utfAs": 9.636
+      },
+      "encode": {
+        "stdlib": 0.91,
+        "utfAs": 5.265
+      },
+      "validateUtf8": 24.926,
+      "validateUtf16": 16.817
+    },
+    {
+      "payload": "french.html",
+      "decode": {
+        "stdlib": 1.995,
+        "utfAs": 4.71
+      },
+      "encode": {
+        "stdlib": 0.88,
+        "utfAs": 3.113
+      },
+      "validateUtf8": 19.412,
+      "validateUtf16": 16.768
+    },
+    {
+      "payload": "turkish.html",
+      "decode": {
+        "stdlib": 1.912,
+        "utfAs": 7.209
+      },
+      "encode": {
+        "stdlib": 0.852,
+        "utfAs": 4.71
+      },
+      "validateUtf8": 16.508,
+      "validateUtf16": 16.893
+    },
+    {
+      "payload": "vietnamese.html",
+      "decode": {
+        "stdlib": 1.724,
+        "utfAs": 3.572
+      },
+      "encode": {
+        "stdlib": 0.731,
+        "utfAs": 3.442
+      },
+      "validateUtf8": 14.066,
+      "validateUtf16": 16.9
+    },
+    {
+      "payload": "chinese.html",
+      "decode": {
+        "stdlib": 1.931,
+        "utfAs": 6.636
+      },
+      "encode": {
+        "stdlib": 0.895,
+        "utfAs": 4.924
+      },
+      "validateUtf8": 12.694,
+      "validateUtf16": 16.775
+    },
+    {
+      "payload": "japanese.html",
+      "decode": {
+        "stdlib": 1.929,
+        "utfAs": 5.917
+      },
+      "encode": {
+        "stdlib": 0.834,
+        "utfAs": 4.501
+      },
+      "validateUtf8": 10.054,
+      "validateUtf16": 16.765
+    },
+    {
+      "payload": "thai.html",
+      "decode": {
+        "stdlib": 1.957,
+        "utfAs": 3.954
+      },
+      "encode": {
+        "stdlib": 0.962,
+        "utfAs": 3.293
+      },
+      "validateUtf8": 10.611,
+      "validateUtf16": 16.924
+    },
+    {
+      "payload": "hindi.html",
+      "decode": {
+        "stdlib": 1.81,
+        "utfAs": 6.201
+      },
+      "encode": {
+        "stdlib": 0.848,
+        "utfAs": 4.799
+      },
+      "validateUtf8": 10.686,
+      "validateUtf16": 16.716
+    },
+    {
+      "payload": "arabic.html",
+      "decode": {
+        "stdlib": 1.678,
+        "utfAs": 4.099
+      },
+      "encode": {
+        "stdlib": 0.749,
+        "utfAs": 2.705
+      },
+      "validateUtf8": 9.348,
+      "validateUtf16": 16.684
+    },
+    {
+      "payload": "korean.html",
+      "decode": {
+        "stdlib": 1.919,
+        "utfAs": 5.186
+      },
+      "encode": {
+        "stdlib": 0.838,
+        "utfAs": 4.261
+      },
+      "validateUtf8": 9.86,
+      "validateUtf16": 16.718
+    },
+    {
+      "payload": "russian.html",
+      "decode": {
+        "stdlib": 1.711,
+        "utfAs": 3.48
+      },
+      "encode": {
+        "stdlib": 0.765,
+        "utfAs": 2.488
+      },
+      "validateUtf8": 9.826,
+      "validateUtf16": 16.916
+    },
+    {
+      "payload": "hebrew.html",
+      "decode": {
+        "stdlib": 1.655,
+        "utfAs": 4.755
+      },
+      "encode": {
+        "stdlib": 0.691,
+        "utfAs": 3.427
+      },
+      "validateUtf8": 7.935,
+      "validateUtf16": 16.811
+    },
+    {
+      "payload": "emoji.txt",
+      "decode": {
+        "stdlib": 2.115,
+        "utfAs": 1.552
+      },
+      "encode": {
+        "stdlib": 0.954,
+        "utfAs": 0.823
+      },
+      "validateUtf8": 4.041,
+      "validateUtf16": 11.24
+    }
+  ]
+}

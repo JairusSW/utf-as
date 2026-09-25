@@ -1,0 +1,12 @@
+{
+  "host": "Ryzen 7 7800X3D",
+  "runtime": "Wago with Wide plugin",
+  "commit": "ea63681",
+  "method": "Median of three runs of repeated batches of 100 validations; 4 KiB per call; values in microseconds per call.",
+  "rows": [
+    { "input": "ASCII", "utf8": [0.094, 0.094, 0.193, 0.192], "utf16": [0.785, 0.300, 2.83, 2.12] },
+    { "input": "Latin", "utf8": [0.622, 0.671, 18.1, 10.5], "utf16": [0.787, 0.298, 2.84, 2.11] },
+    { "input": "CJK", "utf8": [3.34, 0.672, 18.0, 10.5], "utf16": [0.786, 0.298, 2.84, 2.11] },
+    { "input": "Emoji", "utf8": [2.74, 0.668, 18.1, 10.5], "utf16": [0.471, 0.501, 2.84, 2.11] }
+  ]
+}
