@@ -175,6 +175,14 @@ const HI16: u64 = 0xFF80FF80FF80FF80;
       i += 8;
       continue;
     }
+    if ((w0 & HI16) == 0) {
+      // Keep the clean first word in the packed path when only the second
+      // half contains non-ASCII units.
+      store<u32>(out, packLo(w0));
+      out += 4;
+      i += 4;
+      continue;
+    }
     // Dirty word — emit one unit (or surrogate pair), then retry the fast path.
     const w: u32 = load<u16>(src + (<usize>i << 1));
     if (w < 0x80) {

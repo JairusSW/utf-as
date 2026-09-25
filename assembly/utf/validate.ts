@@ -313,6 +313,34 @@ function tail_is_ascii(buf: usize, pos: i32, len: i32): bool {
   let prevHigh: u32 = 0; // 1 if the previous block ended on a high surrogate
   let errors: u32 = 0;
 
+  // A surrogate always has bit 15 set. Test four blocks with one bitmask
+  // before running the full per-block classifier; ASCII, Latin, and most CJK
+  // text can advance 32 units without four SIMD-to-scalar mask transfers.
+  if (units >= 32 && i16x8.bitmask(v128.load(buf)) == 0) {
+    while (pos + 32 <= units) {
+      const base = buf + (<usize>pos << 1);
+      const v0 = v128.load(base);
+      const v1 = v128.load(base, 16);
+      const v2 = v128.load(base, 32);
+      const v3 = v128.load(base, 48);
+      if (i16x8.bitmask(v128.or(v128.or(v0, v1), v128.or(v2, v3))) == 0) {
+        errors |= prevHigh;
+        prevHigh = 0;
+        pos += 32;
+        continue;
+      }
+      let r = surr_block(v0, prevHigh);
+      errors |= r >> 1; prevHigh = r & 1;
+      r = surr_block(v1, prevHigh);
+      errors |= r >> 1; prevHigh = r & 1;
+      r = surr_block(v2, prevHigh);
+      errors |= r >> 1; prevHigh = r & 1;
+      r = surr_block(v3, prevHigh);
+      errors |= r >> 1; prevHigh = r & 1;
+      pos += 32;
+    }
+  }
+
   while (pos + 8 <= units) {
     const r = surr_block(v128.load(buf + (<usize>pos << 1)), prevHigh);
     errors |= r >> 1;

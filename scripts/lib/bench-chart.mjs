@@ -10,8 +10,20 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
-import { ChartJSNodeCanvas } from "chartjs-node-canvas";
 import ChartDataLabels from "chartjs-plugin-datalabels";
+import { generateChart as renderJsonAsChart } from "./json-as-chart.mjs";
+import { MODE_BARS, INK } from "./json-as-palette.mjs";
+
+const whiteBackground = {
+  id: "whiteBackground",
+  beforeDraw(chart) {
+    const { ctx, width, height } = chart;
+    ctx.save();
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+  },
+};
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
 const LOGS_DIR = path.join(ROOT, "build", "logs", "as");
@@ -132,32 +144,55 @@ function metricLabel(metric) {
   return metric;
 }
 
-// Canvases cached by (width × height). Reusing avoids re-running the
-// `chartCallback` (which re-registers chartjs-plugin-datalabels) — repeated
-// registrations confuse per-dataset anchor positioning in grouped bar charts.
-const _canvases = new Map();
-function _canvasFor(width, height) {
-  const key = `${width}x${height}`;
-  let c = _canvases.get(key);
-  if (!c) {
-    c = new ChartJSNodeCanvas({
-      width,
-      height,
-      backgroundColour: "white",
-      chartCallback: (ChartJS) => ChartJS.register(ChartDataLabels),
-    });
-    _canvases.set(key, c);
-  }
-  return c;
-}
-
-/** Render a Chart.js config to PNG. Returns the absolute output path. */
+/** Render with json-as's chart generator. Returns the absolute output path. */
 export async function generateChart(config, outPath, { width = 1280, height = 720 } = {}) {
-  const canvas = _canvasFor(width, height);
   const abs = path.isAbsolute(outPath) ? outPath : path.join(ROOT, outPath);
   fs.mkdirSync(path.dirname(abs), { recursive: true });
-  fs.writeFileSync(abs, await canvas.renderToBuffer(config));
-  console.log("wrote", path.relative(ROOT, abs));
+  // Keep each original chart's payloads and series, with json-as's overview
+  // bar palette, typography, and vertical numeric value labels.
+  const datasets = config.data.datasets.map((dataset) => {
+    const label = dataset.label ?? "";
+    const color = label.includes("String.UTF8") ? MODE_BARS[0]
+      : label.includes("SWAR") ? MODE_BARS[2] : MODE_BARS[3];
+    const { datalabels: _oldLabels, ...rest } = dataset;
+    return { ...rest, backgroundColor: color.bg, borderColor: color.border, borderWidth: 1 };
+  });
+  const values = datasets.flatMap((dataset) => dataset.data).filter((value) => Number.isFinite(value));
+  const max = Math.max(0, ...values);
+  const plugins = config.options.plugins;
+  const styled = {
+    ...config,
+    data: { ...config.data, datasets },
+    options: {
+      ...config.options,
+      plugins: {
+        ...plugins,
+        title: { ...plugins.title, font: { size: 20, weight: "bold" } },
+        subtitle: { ...plugins.subtitle, color: INK.subtitle, font: { size: 11, weight: "bold" }, padding: 16 },
+        legend: { position: "top", labels: { font: { size: 16, weight: "bold" }, padding: 20 } },
+        datalabels: {
+          anchor: "end",
+          align: "end",
+          rotation: -90,
+          color: INK.label,
+          font: { size: 10, weight: "bold" },
+          formatter: (value) => `${(value / 1000).toFixed(1)} GB/s`,
+        },
+      },
+      scales: {
+        ...config.options.scales,
+        x: { ...config.options.scales.x, ticks: { ...config.options.scales.x.ticks, font: { size: 12, weight: "bold" } } },
+        y: {
+          ...config.options.scales.y,
+          suggestedMax: max * 1.25,
+          title: { ...config.options.scales.y.title, font: { size: 16, weight: "bold" } },
+          ticks: { ...config.options.scales.y.ticks, font: { size: 12, weight: "bold" } },
+        },
+      },
+    },
+    plugins: [...(config.plugins ?? []), whiteBackground],
+  };
+  renderJsonAsChart(styled, abs, { width, height });
   return abs;
 }
 

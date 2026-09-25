@@ -52,14 +52,14 @@ if (mbps.every((v) => v === 0) && swar.every((v) => v === 0)) {
       responsive: false,
       plugins: {
         title: { display: true, text: "UTF8.validate throughput on simdutf payloads", font: { size: 22, weight: "bold" } },
-        subtitle: { display: true, text: "MB/s of UTF-8 input (higher = better). SIMD vs SWAR.", color: "#475569" },
+        subtitle: { display: true, text: "MB/s of UTF-8 input (higher = better). Bar labels are GB/s.", color: "#475569" },
         legend: { position: "top" },
         datalabels: {
           anchor: "end",
           align: "end",
           color: "#111827",
           font: { size: 11 },
-          formatter: (v) => v >= 10000 ? `${(v / 1024).toFixed(1)} GB/s` : `${Math.round(v)} MB/s`,
+          formatter: (v) => `${(v / 1000).toFixed(1)} GB/s`,
         },
       },
       scales: {
@@ -68,5 +68,5 @@ if (mbps.every((v) => v === 0) && swar.every((v) => v === 0)) {
       },
     },
   };
-  await generateChart(cfg, withRuntime("./charts/utf-validate-simdutf.png"), { width: 1600, height: 720 });
+  await generateChart(cfg, withRuntime("./charts/utf8-validate-simdutf.png"), { width: 1600, height: 720 });
 }

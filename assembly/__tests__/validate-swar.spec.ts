@@ -276,6 +276,17 @@ describe("SWAR UTF-16 validate / vs reference", () => {
 });
 
 describe("SWAR UTF-16 validate / sweeps", () => {
+  test("SIMD 32-unit skip with later surrogate and boundary carry", () => {
+    const units = 160;
+    for (let off = 8; off < units - 1; off++) {
+      for (let k = 0; k < units; k++) store<u16>(BUF + (<usize>k << 1), 0x4E16);
+      store<u16>(BUF + (<usize>off << 1), 0xD83C);
+      store<u16>(BUF + (<usize>(off + 1) << 1), 0xDF0D);
+      expect(agree16(units << 1)).toBe(true);
+      store<u16>(BUF + (<usize>(off + 1) << 1), 0x0041);
+      expect(agree16(units << 1)).toBe(false);
+    }
+  });
   test("BMP at every length 0..40", () => {
     for (let n = 0; n <= 40; n++) {
       for (let k = 0; k < n; k++) store<u16>(BUF + (<usize>k << 1), <u16>(0x41 + (k % 26)));
