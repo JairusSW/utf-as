@@ -13,7 +13,6 @@
   - [`UTF16`](#utf16)
   - [Validation](#validation)
   - [Length pre-counters](#length-pre-counters)
-  - [Wide kernels](#wide-kernels)
 - [Performance](#performance)
   - [Benchmarks](#benchmarks)
   - [Running benchmarks locally](#running-benchmarks-locally)
@@ -149,41 +148,17 @@ utf16_length_from_utf8(src: usize, len: i32): i32   // → UTF-16 units from UTF
 utf8_length_from_utf16(src: usize, len: i32): i32   // → UTF-8 bytes from UTF-16 units (0 on lone surrogate)
 ```
 
-### Wide kernels
-
-The optional `utf-as/wide` entrypoint exposes 256-bit and 512-bit validators
-and length counters. Its block algorithms live in this package and use the
-published `as-simd@0.0.2` generic Wide API:
-
-```ts
-import {
-  validateWide256, validateWide512,
-  validateUtf16Wide256, validateUtf16Wide512,
-  utf16LengthWide256, utf16LengthWide512,
-  utf8LengthWide256, utf8LengthWide512,
-} from "utf-as/wide";
-```
-
-Validation lengths are in bytes; `utf8LengthWide*` takes UTF-16 code units and
-returns zero on malformed input. UTF-8 length counting assumes well-formed
-input. Validation and length counting use general vector operations, with
-portable fallbacks. `WAGO_PLUGINS=wide` and `--transform as-simd` let the
-published transform lower supported operations to Wide imports. Current
-compiler output keeps most of these algorithms in portable Wasm, including
-the 512-bit validation path. The public `UTF8` and `UTF16` namespaces retain
-their SWAR/v128 dispatch.
-
 ## Performance
 
 ### Benchmarks
 
-![String.UTF8.decode versus utf-as SIMD and SWAR decode throughput on 15 payloads](./charts/utf-vs-stdlib-decode-v8.png)
+![String.UTF8.decode versus utf-as SIMD and SWAR decode throughput on 15 payloads](https://github.com/JairusSW/utf-as/blob/59d18f64ceb545dc890292a1b47a87fbda852ca8/charts/utf-vs-stdlib-decode-v8.png)
 
-![String.UTF8.encode versus utf-as SIMD and SWAR encode throughput on 15 payloads](./charts/utf-vs-stdlib-encode-v8.png)
+![String.UTF8.encode versus utf-as SIMD and SWAR encode throughput on 15 payloads](https://github.com/JairusSW/utf-as/blob/59d18f64ceb545dc890292a1b47a87fbda852ca8/charts/utf-vs-stdlib-encode-v8.png)
 
-![utf-as UTF8.validate SIMD and SWAR throughput on 15 payloads](./charts/utf8-validate-simdutf-v8.png)
+![utf-as UTF8.validate SIMD and SWAR throughput on 15 payloads](https://github.com/JairusSW/utf-as/blob/59d18f64ceb545dc890292a1b47a87fbda852ca8/charts/utf8-validate-simdutf-v8.png)
 
-![utf-as UTF16.validate SIMD and SWAR throughput on 15 payloads](./charts/utf16-validate-simdutf-v8.png)
+![utf-as UTF16.validate SIMD and SWAR throughput on 15 payloads](https://github.com/JairusSW/utf-as/blob/59d18f64ceb545dc890292a1b47a87fbda852ca8/charts/utf16-validate-simdutf-v8.png)
 
 ### Running benchmarks locally
 

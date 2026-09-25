@@ -5,6 +5,7 @@ node_modules/
 
 # Generated benchmark and wasm output
 build/
+bench/results
 
 # Keep the four V8 charts shown in README; other rendered charts are published
 # to the `docs` branch by scripts/publish-benchmarks.sh.
